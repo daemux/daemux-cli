@@ -7,9 +7,9 @@ A **minimal but scalable** architecture for a universal agent platform.
 **Key insight:** 80% of functionality comes from 20% of the code if you design the core correctly.
 
 **Your Platform Philosophy:**
-- Tiny Core (2-3K LOC) + Everything as Plugins
-- Core contains: Agentic Loop + Plugin Loader + Event Bus
-- Plugins provide: Skills, MCPs, Channels, Memory, Tools
+- Tiny Core + Everything as Plugins
+- Core contains: Agentic Loop + Plugin Loader + Event Bus + Agent Registry + Task Manager
+- Plugins provide: MCPs, Channels, Memory, Knowledge
 
 ---
 
@@ -81,45 +81,62 @@ A **minimal but scalable** architecture for a universal agent platform.
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
 │  │                         PLUGIN LAYER                                    ││
 │  │                                                                         ││
+│  │  ┌─────────────────────────────────────────────────────────────────┐   ││
+│  │  │                    PLUGIN STRUCTURE                              │   ││
+│  │  │  Each plugin can contain: agents/, commands/, hooks/, .mcp.json │   ││
+│  │  └─────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                         ││
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   ││
-│  │  │  Channels   │  │   Skills    │  │    MCPs     │  │   Memory    │   ││
+│  │  │  Channels   │  │    MCPs     │  │   Memory    │  │   Agents    │   ││
+│  │  │  (plugins)  │  │  (plugins)  │  │  (plugin)   │  │  (plugins)  │   ││
 │  │  │             │  │             │  │             │  │             │   ││
-│  │  │ - Telegram  │  │ - GitHub    │  │ - Jira      │  │ - Vector DB │   ││
-│  │  │ - Slack     │  │ - Email     │  │ - Salesforce│  │ - Knowledge │   ││
-│  │  │ - Discord   │  │ - Calendar  │  │ - Notion    │  │ - Sessions  │   ││
-│  │  │ - Email     │  │ - CRM       │  │ - Custom    │  │             │   ││
-│  │  │ - Voice     │  │             │  │             │  │             │   ││
+│  │  │ - Telegram  │  │ - GitHub    │  │ - Vector DB │  │ - Reviewer  │   ││
+│  │  │ - Slack     │  │ - Jira      │  │ - Sessions  │  │ - Architect │   ││
+│  │  │ - Discord   │  │ - Calendar  │  │ - Compactor │  │ - Tester    │   ││
+│  │  │ - Email     │  │ - Database  │  │ - Search    │  │ - Explorer  │   ││
+│  │  │ - Voice     │  │ - Custom    │  │             │  │ - Custom    │   ││
 │  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘   ││
-│  └─────────┼────────────────┼────────────────┼────────────────┼───────────┘│
-│            └────────────────┴───────┬────────┴────────────────┘            │
-│                                     │                                      │
+│  │         │                │                │                │          ││
+│  │  ┌──────┴────────────────┴────────────────┴────────────────┴───────┐  ││
+│  │  │                    KNOWLEDGE (auto-loaded)                       │  ││
+│  │  │  AGENT.md (project) | ~/.agent/rules/ (global) | plugin rules   │  ││
+│  │  └─────────────────────────────────────────────────────────────────┘  ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                     │                                       │
 │  ┌──────────────────────────────────┼──────────────────────────────────────┐│
-│  │                    TINY CORE (~2-3K LOC)                               ││
+│  │                         TINY CORE                                      ││
 │  │                                  │                                      ││
 │  │    ┌─────────────────────────────┴─────────────────────────────┐       ││
-│  │    │              UNIFIED PLUGIN API (~20 methods)             │       ││
-│  │    │  registerChannel | registerSkill | registerMCP            │       ││
-│  │    │  registerTool    | registerMemory | on(event)             │       ││
+│  │    │              UNIFIED PLUGIN API (~25 methods)             │       ││
+│  │    │  registerChannel | registerMCP | registerAgent            │       ││
+│  │    │  registerMemory  | spawnSubagent | on(event)              │       ││
+│  │    │  createTask | updateTask | searchMemory | log             │       ││
 │  │    └─────────────────────────────┬─────────────────────────────┘       ││
 │  │                                  │                                      ││
 │  │    ┌─────────────┐    ┌──────────┴──────────┐    ┌─────────────┐       ││
-│  │    │ Event Bus   │◄───┤   AGENTIC LOOP      ├───►│ Task Queue  │       ││
-│  │    │ (pub/sub)   │    │                     │    │ (priority)  │       ││
-│  │    └─────────────┘    │ 1. Receive message  │    └─────────────┘       ││
-│  │                       │ 2. Build context    │                          ││
-│  │    ┌─────────────┐    │ 3. Call LLM         │    ┌─────────────┐       ││
-│  │    │ Config      │◄───┤ 4. Execute tools    ├───►│ State       │       ││
-│  │    │ Manager     │    │ 5. Loop until done  │    │ Manager     │       ││
-│  │    └─────────────┘    │ 6. Deliver response │    └─────────────┘       ││
-│  │                       └─────────────────────┘                          ││
+│  │    │ Event Bus   │◄───┤   AGENTIC LOOP      ├───►│ Task Manager│       ││
+│  │    │ (pub/sub)   │    │  (main orchestrator)│    │ (workflow)  │       ││
+│  │    └─────────────┘    │                     │    └─────────────┘       ││
+│  │                       │ 1. Receive message  │                          ││
+│  │    ┌─────────────┐    │ 2. Check/compact    │    ┌─────────────┐       ││
+│  │    │ Agent       │◄───┤ 3. Build context    ├───►│ Debug       │       ││
+│  │    │ Registry    │    │ 4. Call LLM         │    │ Logger      │       ││
+│  │    └─────────────┘    │ 5. Execute/spawn    │    └─────────────┘       ││
+│  │                       │ 6. Loop until done  │                          ││
+│  │    ┌─────────────┐    └─────────────────────┘    ┌─────────────┐       ││
+│  │    │ Message     │                               │ Plugin      │       ││
+│  │    │ Queue       │                               │ Loader      │       ││
+│  │    └─────────────┘                               └─────────────┘       ││
 │  └────────────────────────────────────────────────────────────────────────┘│
 │                                                                              │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │                    PER-AGENT STORAGE (SQLite)                          │ │
-│  │   SQLite (state.db) │ Files (data/) │ sqlite-vec (vectors) │ Service  │ │
+│  │  state.db: sessions | tasks | entities | audit | sqlite-vec: vectors  │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Key Architecture Insight:** ALL agents are defined INSIDE plugins (like Claude Code), not in core. Each plugin can contain `agents/` directory with agent definitions that are auto-discovered. Core only provides the Agent Registry for loading/spawning - all agent definitions live in plugins.
 
 ---
 
@@ -127,24 +144,28 @@ A **minimal but scalable** architecture for a universal agent platform.
 
 ### 1. Tiny Core, Fat Plugins
 
-Core should be ~2-3K LOC with ONLY:
-- Agentic loop (message → LLM → tools → loop)
+Core should be minimal with ONLY:
+- Agentic loop (message → LLM → tools/spawn → loop)
+- Agent registry and spawning
+- Task manager for workflow tracking
 - Plugin loader and API
 - Event bus for communication
 - Config and state management
 
 **Everything else is a plugin:**
 - Channels (Telegram, Slack, Email) → Channel plugins
-- Skills (GitHub, Calendar, CRM) → Skill plugins
-- MCPs (Jira, Salesforce, custom) → MCP plugins
-- Memory (vector search, knowledge base) → Memory plugins
+- MCPs (GitHub, Jira, Calendar, databases) → MCP plugins (unified tools)
+- Memory (vector search, sessions, compaction) → Memory plugins
+- Knowledge (AGENT.md, rules, patterns) → Markdown files
 - Even the LLM provider → Provider plugin
 
 ### 2. Simple Plugin Interface
 
-Plugin API should have ~20 methods:
-- Registration: registerChannel, registerSkill, registerMCP, registerTool, registerMemory, registerProvider
-- Lifecycle hooks: just 5 events (message, agent:start, agent:end, startup, shutdown)
+Plugin API should have ~25 methods:
+- Registration: registerChannel, registerMCP, registerAgent, registerMemory, registerProvider
+- Agent operations: spawnSubagent, listAgents, getAgent
+- Task operations: createTask, updateTask, listTasks, getTask
+- Lifecycle hooks: 7 events (message, agent:start, agent:end, subagent:spawn, startup, shutdown, preCompact)
 - Utilities: sendMessage, searchMemory, getState, setState
 
 ### 3. Minimal Channel Interface
@@ -155,13 +176,20 @@ Just 4 methods per channel:
 - send(target, message) - Send outbound message
 - onMessage(handler) - Receive inbound messages
 
-### 4. Skills = Tools + Documentation
+### 4. MCPs = Unified External Tools
 
-Skills are simple: a description for the LLM + tool definitions. No complex framework needed.
+All external tool integrations use Model Context Protocol:
+- Standard protocol: connect, listTools, callTool, listResources, readResource
+- Supports: stdio (local), SSE (cloud), HTTP (REST), WebSocket (realtime)
+- Replaces custom skill implementations - use existing MCP servers
 
-### 5. MCPs Follow Standard Protocol
+### 5. Knowledge = Guidance Files
 
-Use the Model Context Protocol standard - connect, listTools, callTool, listResources, readResource.
+Domain knowledge bundled as simple markdown (not tool implementations):
+- `AGENT.md` - Auto-loaded project context (like CLAUDE.md)
+- `~/.agent/rules/` - Global patterns and guidelines
+- `.agent/rules/` - Project-specific rules
+- Loaded into agent context, separate from tools
 
 ---
 
@@ -209,14 +237,6 @@ Each agent has its own directory with:
 | **Backup** | Just copy the .db file |
 | **Portability** | Move agent = copy directory |
 | **No dependencies** | No PostgreSQL/Redis to manage |
-
-### Optional: Central Control Plane
-
-If managing 1000 agents, add a lightweight control plane for:
-- Agent registry and discovery
-- Config distribution
-- Health monitoring
-- Log collection
 
 ---
 
@@ -273,11 +293,57 @@ The key insight:
 5. **Stream for UX** - Use streaming API for real-time feedback
 6. **No limits on iterations** - Let Claude work until it's done (add timeout for safety)
 
+### Error Recovery & Resilience
+
+**Philosophy: Fail-Open with Logging**
+Operations never fail completely. Errors are logged, users informed, system proceeds.
+
+#### Transcript Corruption Detection
+- Every message stores `parent_uuid` pointing to previous message
+- Before each LLM call, validate chain integrity
+- If cycle detected (UUID appears twice) → truncate at last valid message
+- Log corruption event, continue with truncated context
+
+#### Token Limit Safeguards
+- Reserve space for max output tokens: `effective_context = max_tokens - reserved_output`
+- Pre-check before LLM call: if usage > 98% effective → block new messages
+- Auto-compact triggers at 80% (leaves buffer for compaction itself)
+
+#### Orphaned Process Cleanup
+- Track OS process ID (PID) in subagent registry
+- Background check every 60 seconds for:
+  - Running subagents past timeout → SIGTERM, then SIGKILL after 10s
+  - Zombie processes (registered but PID gone) → mark orphaned, cleanup
+- Log all termination events with reason
+
+#### Hook Failure Handling
+- Hooks run in subprocess with 10-minute timeout
+- Exit codes: 0 = success, 1 = warning to user, 2 = error to Claude
+- Timeout (124) treated as exit 1
+- **Never-block principle**: hook failure never stops agent work
+
+#### Rate Limit Handling
+- Show warning at 70% usage (not error)
+- Implement exponential backoff: 2s → 4s → 8s → 16s → 30s max
+- Auto-refresh OAuth tokens 5 minutes before expiry
+
+#### Failure Modes Matrix
+
+| Failure | Detection | Recovery | Outcome |
+|---------|-----------|----------|---------|
+| Transcript cycle | UUID chain validation | Truncate + resume | Continue with truncated history |
+| Token overflow | Effective window tracking | Auto-compact at 80% | Free up context space |
+| Subagent timeout | Registry scan every 60s | SIGKILL after SIGTERM | Mark failed, cleanup |
+| Hook crash | Subprocess timeout/exit | Log, continue always | Never blocks loop |
+| Rate limited | HTTP 429 | Exponential backoff | Retry with delay |
+| DB corruption | Integrity check on startup | Restore from backup | Emit alert, resume |
+
 ### Critical Implementation Details (Often Missed)
 
 **Context Window Management:**
 - Use **effective context window** = full window - reserved space for max output tokens
-- Auto-compact conversation when approaching limit (~98% usage)
+- Auto-compact conversation at ~80% usage (gives room to complete compaction)
+- Block at ~98% usage (prevent "too long" errors)
 - Large outputs (PDFs, tool results) saved to disk with file reference instead of inline
 - Remove phantom "(no content)" blocks that waste tokens
 
@@ -320,6 +386,8 @@ Claude Code's hooks can be written in **any language** (Python, Shell, Node, etc
 |-------|------|------------|
 | PreToolUse | Before tool executes | allow/deny/ask, additionalContext |
 | PostToolUse | After tool completes | logging, feedback |
+| PreCompact | Before memory compaction | inject critical context to preserve |
+| SubagentSpawn | Before subagent spawns | modify input, deny spawn |
 | UserPromptSubmit | User sends message | validate, inject context |
 | Stop | Agent tries to exit | verify completion |
 | SessionStart | Session begins | load config |
@@ -331,48 +399,139 @@ Claude Code's hooks can be written in **any language** (Python, Shell, Node, etc
 - Any executable works (Go, Rust binaries, etc.)
 - Plugins can include Python/Shell without TypeScript
 
+### Logging & Debugging System
+
+Comprehensive logging for debugging and monitoring:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DEBUG LOGGING SYSTEM                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Log Directory: ~/.agent/debug-logs/                           │
+│   Latest Log:    ~/.agent/debug-logs/latest (symlink)           │
+│                                                                  │
+│   Enable via:                                                    │
+│   - CLI flag:     agent --debug                                 │
+│   - MCP-specific: agent --mcp-debug                             │
+│   - API logging:  ANTHROPIC_LOG=debug agent                     │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**What Gets Logged:**
+
+| Category | Details |
+|----------|---------|
+| **API Calls** | Requests, responses, timing (when ANTHROPIC_LOG=debug) |
+| **Tool Execution** | Tool calls, results, failures, denials |
+| **Hook Events** | PreToolUse/PostToolUse invocations, decisions |
+| **MCP Activity** | Server startup, tool discovery, protocol messages |
+| **Subagent Spawns** | Agent launches, input, output, metrics |
+| **Sessions** | Start, end, compaction events |
+| **Errors** | Stack traces, context, recovery attempts |
+
+**Log Management:**
+- `cleanupPeriodDays` setting controls retention (default: 7 days)
+- Sensitive data (tokens, passwords, API keys) automatically sanitized
+- Session-specific log files with `latest` symlink for monitoring
+- Real-time monitoring: `tail -f ~/.agent/debug-logs/latest`
+
+**Audit Logging (separate from debug):**
+- Stored in SQLite `audit` table for compliance
+- Records: timestamp, user, tool, action, result
+- Queryable history of all agent actions
+- Can be extended via PostToolUse hooks for custom destinations
+
 ---
 
 ## Autonomous Agent Features
 
 For **fully autonomous** operation without human-in-the-loop, these features are essential:
 
-### Approval Queue (Non-Blocking Human Decisions)
+### Approval Queue (Hybrid: Promise + DB Checkpoint)
 
-When an agent needs human approval but shouldn't block, use an **approval queue**:
+**Architecture**: Promise-based waiting with database checkpoint for restart recovery.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    APPROVAL QUEUE PATTERN                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   Agent encounters decision requiring approval                   │
-│        │                                                         │
-│        ▼                                                         │
-│   ┌─────────────────────┐                                       │
-│   │ Create approval     │                                       │
-│   │ request in queue    │                                       │
-│   │ (persist to DB)     │                                       │
-│   └──────────┬──────────┘                                       │
-│              │                                                   │
-│              ▼                                                   │
-│   ┌─────────────────────┐      ┌─────────────────────┐         │
-│   │ Agent continues     │      │ Human reviews via   │         │
-│   │ other work OR       │◄────►│ /approve <id> allow │         │
-│   │ waits with timeout  │      │ /approve <id> deny  │         │
-│   └──────────┬──────────┘      └─────────────────────┘         │
-│              │                                                   │
-│              ▼                                                   │
-│   Agent receives approval/denial via event                      │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+#### Flow
+1. Agent requests approval → creates DB record + Promise
+2. Returns `status: "approval-pending"` immediately to LLM
+3. Waits async in background (120s timeout)
+4. Human approves via any interface → resolves Promise
+5. DB updated with decision for audit
+
+#### Storage Schema
+```sql
+CREATE TABLE approval_requests (
+  id TEXT PRIMARY KEY,
+  command TEXT NOT NULL,
+  context TEXT,                    -- JSON: why, agent_id, task_id
+  created_at_ms INTEGER NOT NULL,
+  expires_at_ms INTEGER NOT NULL,
+  decision TEXT,                   -- 'allow-once' | 'allow-always' | 'deny' | NULL
+  decided_at_ms INTEGER,
+  decided_by TEXT
+);
 ```
 
-**Key Design:**
-- Approval requests stored in SQLite (survives restarts)
-- Each request has unique ID, context, expiry time
-- Human can approve via any channel (CLI, web, Telegram command)
-- Agent can: wait (blocking), continue other work (non-blocking), or timeout with default action
+#### Implementation Pattern
+```typescript
+class ApprovalManager {
+  private pending = new Map<string, { resolve, timeout }>();
+
+  async requestApproval(cmd: string): Promise<Decision | null> {
+    const id = uuid();
+
+    // DB checkpoint (survives restart)
+    await db.approvals.insert({ id, cmd, createdAt: now(), expiresAt: now() + 120_000 });
+
+    // Promise-based wait
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        resolve(null);  // Timeout → null
+      }, 120_000);
+      this.pending.set(id, { resolve, timeout: timer });
+    });
+  }
+
+  resolveApproval(id: string, decision: Decision) {
+    const entry = this.pending.get(id);
+    if (entry) {
+      clearTimeout(entry.timeout);
+      entry.resolve(decision);
+      this.pending.delete(id);
+    }
+    db.approvals.update({ id }, { decision, decidedAt: now() });
+  }
+
+  // Recovery on startup
+  async recoverPending() {
+    const stale = await db.approvals.find({ decision: null, expiresAt: { $lt: now() } });
+    for (const row of stale) {
+      await db.approvals.update({ id: row.id }, { decision: 'timeout' });
+    }
+  }
+}
+```
+
+#### Timeout Handling
+- Default timeout: 120 seconds
+- On timeout: decision = null → configurable fallback:
+  - `deny` (default, safe)
+  - `allow-once` (for low-risk operations)
+  - `defer-to-allowlist` (check patterns)
+
+#### Interfaces (all write to same DB)
+- **CLI**: `agent approve <id> --allow|--deny`
+- **Web UI**: Buttons (Allow once / Always allow / Deny)
+- **API**: POST /approvals/{id}/decision
+- **Channel DM**: Action buttons in notification
+
+#### Queue Display
+- Show countdown timer (time remaining)
+- Show queue count if multiple pending
+- FIFO processing order
 
 ### Heartbeat System (Autonomous Self-Check)
 
@@ -453,7 +612,7 @@ When conversation approaches context limit, auto-summarize:
 │        │                                                         │
 │        ▼                                                         │
 │   ┌─────────────────────┐                                       │
-│   │ current_tokens >    │  (threshold ~95% of effective window) │
+│   │ current_tokens >    │  (threshold ~80% of effective window) │
 │   │ compaction_threshold│                                       │
 │   └──────────┬──────────┘                                       │
 │              │ Yes                                               │
@@ -480,6 +639,46 @@ When conversation approaches context limit, auto-summarize:
 - Store compaction summaries in semantic memory (searchable)
 - Preserve critical context: user identity, project context, active tasks
 - Full transcript always saved to JSONL (can reconstruct if needed)
+
+### Task Manager (Workflow Tracking)
+
+For multi-step workflows, track progress with structured tasks:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TASK MANAGEMENT                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Task Lifecycle:                                               │
+│                                                                  │
+│   pending ──────► in_progress ──────► completed                 │
+│      │                                    │                     │
+│      └──────────────────────────────────► deleted               │
+│                                                                  │
+│   Dependencies:                                                  │
+│                                                                  │
+│   Task A ──blocks──► Task B                                     │
+│   Task B ──blockedBy──► Task A                                  │
+│                                                                  │
+│   Task B cannot start until Task A completes                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Task Fields:**
+- id, subject, description, active_form (UI spinner text)
+- status: pending | in_progress | completed
+- owner: agent name working on it
+- blocked_by, blocks: arrays of task IDs for dependencies
+- metadata: custom JSON data
+- timestamps: created_at, updated_at
+
+**When to Use Tasks:**
+- Multi-step workflows (3+ steps)
+- Agent handoffs (architect → developer → reviewer)
+- Parallel work coordination
+- Progress visibility for users
+- Resumability after crashes
 
 ### Subagent Registry (Multi-Agent Coordination)
 
@@ -517,6 +716,32 @@ Track spawned subagents globally to prevent orphans:
 3. Subagent completes → marks done, stores result
 4. Parent collects result → marks collected
 5. Cleanup job removes old entries
+
+### Agent Definition Format
+
+Subagents are defined as markdown files with YAML frontmatter, **located inside plugins**:
+
+```
+~/.agent/plugins/my-plugin/agents/    # User plugin agents
+./.agent/plugins/my-plugin/agents/    # Project plugin agents
+plugins/feature-dev/agents/            # Bundled plugin agents
+```
+
+**All agents live in plugins**, including default ones like Explorer. The `core-agents` plugin ships with the platform and provides common agents. This follows Claude Code's pattern where `plugins/*/agents/*.md` are auto-discovered.
+
+**Agent Definition Structure (YAML frontmatter + markdown body):**
+
+| Field | Required | Values | Description |
+|-------|----------|--------|-------------|
+| name | Yes | lowercase-hyphens | Agent identifier (3-50 chars) |
+| description | Yes | string | Triggering conditions with examples |
+| model | No | inherit/sonnet/opus/haiku | LLM model to use |
+| tools | No | array | Allowed tools (empty = all) |
+| color | Yes | blue/cyan/green/yellow/red | Visual identifier |
+
+**Body Content:** System prompt defining agent's role, responsibilities, process steps, and output format.
+
+**Agent Result:** Returns agentId, output, tokensUsed, toolUses, durationMs for metrics.
 
 ### Queue Modes (Concurrent Message Handling)
 
@@ -610,7 +835,6 @@ Unified interface for sending to any channel:
 │   │ 1. Format message   │  (markdown → channel-specific)        │
 │   │ 2. Split if needed  │  (respect length limits)              │
 │   │ 3. Route to channel │  (based on target config)             │
-│   │ 4. Track delivery   │  (store in DB with status)            │
 │   └──────────┬──────────┘                                       │
 │              │                                                   │
 │       ┌──────┴──────┬──────────┬──────────┐                    │
@@ -626,8 +850,6 @@ Unified interface for sending to any channel:
 - Message formatting per channel (markdown variants)
 - Attachment handling (inline vs file upload)
 - Reply threading (if channel supports)
-- Delivery confirmation tracking
-- Retry on failure with backoff
 
 ---
 
@@ -655,31 +877,44 @@ Separation of **installed package** (stateless) from **user data** (persistent):
 ├── sessions/                  # Conversation history (JSONL files)
 │   ├── session-abc123.jsonl
 │   └── index.json            # Lightweight session index
-├── skills/                    # User custom skills (hot-reloaded)
-│   └── my-skill/
-│       └── SKILL.md
+├── debug-logs/                # Debug logging output
+│   ├── session-abc123.log
+│   └── latest                # Symlink to current session log
+├── rules/                     # Global knowledge/patterns
+│   └── my-patterns.md
 ├── commands/                  # User custom commands
 │   └── my-command.md
 ├── hooks/                     # User hooks (Python/Shell/any)
 │   ├── hooks.json
 │   └── my-hook.py
-├── plugins/                   # Installed plugins
-│   └── plugin-name/
+├── plugins/                   # Installed plugins (with agents inside)
+│   └── my-plugin/
+│       ├── .claude-plugin/plugin.json
+│       ├── agents/           # Agent definitions for this plugin
+│       │   └── reviewer.md
+│       ├── commands/
+│       └── .mcp.json
 └── shell-snapshots/           # Bash environment state
 ```
 
 ### Project Directory (./.agent/)
 ```
 ./.agent/                       # Project-specific (in project root)
+├── AGENT.md                   # Auto-loaded project context (like CLAUDE.md)
 ├── settings.json              # Project settings (git-tracked)
 ├── settings.local.json        # User local overrides (git-ignored)
-├── skills/                    # Project skills
+├── rules/                     # Context rules and knowledge
+│   └── coding-standards.md
 ├── commands/                  # Project commands
 ├── hooks/                     # Project hooks
 │   ├── hooks.json
 │   └── validate-bash.sh      # Can be Shell/Python/any
-├── rules/                     # Context rules and memory
-│   └── project-context.md
+├── plugins/                   # Project-specific plugins (with agents inside)
+│   └── project-tools/
+│       ├── .claude-plugin/plugin.json
+│       ├── agents/           # Project-specific agents
+│       │   └── project-reviewer.md
+│       └── commands/
 └── plugin-name.local.md       # Per-plugin config (git-ignored)
 ```
 
@@ -687,22 +922,29 @@ Separation of **installed package** (stateless) from **user data** (persistent):
 ```
 agent-platform/                 # Development repository
 ├── src/
-│   ├── core/                  # TINY CORE (~2K LOC)
-│   │   ├── loop.ts            # Agentic loop
+│   ├── core/                  # TINY CORE
+│   │   ├── loop.ts            # Agentic loop (orchestrator)
+│   │   ├── agent-registry.ts  # Agent loading + spawning
+│   │   ├── task-manager.ts    # Workflow task tracking
 │   │   ├── plugin-api.ts      # Plugin interface
 │   │   ├── plugin-loader.ts   # Dynamic loading
 │   │   ├── event-bus.ts       # Pub/sub
 │   │   ├── config.ts          # Configuration
 │   │   └── state.ts           # State management
 │   │
-│   ├── infra/                 # Infrastructure (~1K LOC)
+│   ├── infra/                 # Infrastructure
 │   │   ├── database.ts        # SQLite abstraction
-│   │   ├── queue.ts           # Task queue
+│   │   ├── message-queue.ts   # Message queuing (steer/interrupt/queue)
+│   │   ├── logger.ts          # Debug logging system
 │   │   └── service.ts         # Daemon management
 │   │
-│   └── cli/                   # CLI commands (~500 LOC)
+│   └── cli/                   # CLI commands
 │
-├── plugins/                   # Bundled plugins (optional)
+├── plugins/                   # Bundled plugins
+│   └── core-agents/           # Default agents (shipped as plugin)
+│       ├── .claude-plugin/plugin.json
+│       └── agents/
+│           └── explorer.md    # Default exploration agent
 └── package.json
 ```
 
@@ -743,62 +985,70 @@ Each agent daemon should:
 
 ## Implementation Roadmap
 
-### Phase 1: Core (2 weeks)
+### Phase 1: Core Foundation
 - Agentic loop with tool execution
+- **Task Manager**: Create, update, list with dependencies
 - Plugin loader (dynamic import)
 - Event bus (pub/sub)
-- SQLite state backend
+- SQLite state backend with tasks table
 - Session state store with rich metadata
 - CLI: start/stop/config/status
 
-### Phase 2: Essential Plugins (2 weeks)
+### Phase 2: Agent System
+- **Agent Registry**: Load definitions from markdown files
+- **Subagent Spawning**: Launch isolated agents with tool restrictions
+- Agent definition parser (YAML frontmatter + markdown body)
+- Model configuration per agent (inherit/sonnet/opus/haiku)
+- Tool access restrictions per agent
+
+### Phase 3: Essential Plugins
 - Anthropic provider plugin
+- MCP protocol support (stdio, SSE, HTTP, WebSocket)
 - Telegram channel plugin (with typing indicators)
-- Slack channel plugin
-- Email channel plugin (IMAP/SMTP)
-- Basic tools skill (bash, file, http)
+- Basic built-in tools (bash, file, http)
 - Channel adapter pipeline for multi-channel delivery
 
-### Phase 3: Autonomous Features (2 weeks)
+### Phase 4: Memory & Autonomy
+- Memory compaction with token awareness (auto at 80%)
+- JSONL transcript backup and recovery
 - Queue modes (steer/interrupt/queue/collect)
 - Approval queue for non-blocking human decisions
-- Memory compaction with token awareness
-- JSONL transcript backup and recovery
-- Message timing delays (human-like behavior)
+- sqlite-vec for semantic memory/search
 
-### Phase 4: Production Ready (2 weeks)
+### Phase 5: Production Ready
 - Cross-platform daemon (systemd/launchd/Windows)
 - Heartbeat system with HEARTBEAT.md
 - Cron service (at/every/cron schedules)
-- sqlite-vec for semantic memory
+- Human-like behavior (typing indicators, delays)
 - Audit logging and health monitoring
 
-### Phase 5: Multi-Agent & Advanced (2 weeks)
-- Subagent spawning with registry
-- Subagent lifecycle tracking and auto-cleanup
-- MCP protocol support
+### Phase 6: Advanced & Distribution
 - Voice channel plugin
-- Optional: Central control plane API
+- Central control plane API (optional)
 - Docker image & deployment scripts
+- npm package distribution
+- Documentation & examples
 
 ---
 
 ## Key Recommendations Summary
 
-1. **Language:** TypeScript + Node.js 22+ (like Claude Code)
-2. **Build:** tsdown or tsup for fast bundling
+1. **Language:** TypeScript + Bun (fast startup, built-in SQLite)
+2. **Build:** Bun bundler (replaces tsdown/esbuild)
 3. **Distribution:** npm package + Docker image
 4. **Database:** SQLite per agent (no shared infra)
-5. **Core size:** ~3K LOC maximum
-6. **Plugin API:** ~20 methods, not 374
-7. **Lifecycle hooks:** 5 events, not 14
+5. **Core size:** Minimal, focused
+6. **Plugin API:** ~25 methods (added agent + task operations)
+7. **Lifecycle hooks:** 7 events (added subagent:spawn, preCompact)
 8. **Channels:** Plugin-based, 4 methods each
 9. **Daemon:** Platform-specific service managers
 10. **Scaling:** Horizontal (more instances, not bigger)
 11. **Autonomous:** Approval queue + heartbeat + cron (no blocking on humans)
-12. **Context:** Token-aware compaction + JSONL backup
-13. **Multi-agent:** Subagent registry with lifecycle tracking
-14. **Human-like:** Typing indicators, response delays, queue modes
+12. **Context:** Token-aware compaction (80%) + JSONL backup
+13. **Multi-agent:** Agent registry + subagent spawning with lifecycle tracking
+14. **Task tracking:** Structured tasks with dependencies for workflows
+15. **Tools:** MCPs unified (replaced Skills with MCP protocol)
+16. **Knowledge:** Markdown files (AGENT.md, rules/) for guidance
 
 ---
 
@@ -806,13 +1056,15 @@ Each agent daemon should:
 
 | Requirement | Solution | Status |
 |-------------|----------|--------|
-| Cross-platform (Linux/Mac/Windows) | Node.js + platform service managers | ✓ |
+| Cross-platform (Linux/Mac/Windows) | Bun/Node.js + platform service managers | ✓ |
 | Installable on any OS | npm package + optional binary | ✓ |
 | Agentic logic like Claude Code | Loop until stop_reason !== tool_use | ✓ |
-| MCPs support | Standard MCP protocol plugin | ✓ |
-| Subagents | Spawn subprocess with inherited config | ✓ |
-| Skills as plugins | SkillPlugin interface | ✓ |
-| Minimal core | 3K LOC | ✓ |
+| MCPs support | Standard MCP protocol (stdio/SSE/HTTP/WS) | ✓ |
+| Agent definitions | Markdown files with YAML frontmatter | ✓ |
+| Subagent spawning | Agent registry + spawn with tool restrictions | ✓ |
+| Workflow tracking | Task manager with dependencies | ✓ |
+| Knowledge/guidance | AGENT.md + rules/ (replaced Skills) | ✓ |
+| Minimal core | Minimal, focused | ✓ |
 | Full capabilities | Plugin-based coverage | ✓ |
 | Fully autonomous | Approval queue + heartbeat + cron | ✓ |
 | 1000+ instances | 1 agent = 1 VM/Docker | ✓ |
@@ -822,8 +1074,8 @@ Each agent daemon should:
 | Non-blocking human decisions | Approval queue pattern | ✓ |
 | Scheduled tasks | Cron service (at/every/cron) | ✓ |
 | Self-planning | Heartbeat + HEARTBEAT.md | ✓ |
-| Context management | Token-aware compaction | ✓ |
-| Multi-agent coordination | Subagent registry | ✓ |
+| Context management | Token-aware compaction (80%) | ✓ |
+| Multi-agent coordination | Agent registry + subagent lifecycle | ✓ |
 | Concurrent messages | Queue modes (steer/interrupt/queue) | ✓ |
 | Human-like behavior | Typing indicators, delays | ✓ |
 | Multi-channel delivery | Channel adapter pipeline | ✓ |
