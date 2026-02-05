@@ -1,0 +1,10 @@
+{
+  "name": "core-agents",
+  "version": "1.0.0",
+  "description": "Core agents shipped with the platform",
+  "agents": [
+    "agents/explorer.md",
+    "agents/researcher.md",
+    "agents/planner.md"
+  ]
+}

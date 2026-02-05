@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Build Output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Runtime & Cache
+.daemux/
+.bun/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.#*
+.history/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Logs
+logs/
+*.log
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.pid
+
+# Database Artifacts
+*.sqlite-shm
+*.sqlite-wal
+*.db-shm
+*.db-wal
+
+# Yarn
+.pnp
+.pnp.js

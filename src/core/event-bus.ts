@@ -1,0 +1,213 @@
+/**
+ * Typed Event Bus with Pub/Sub Pattern
+ * Provides strongly typed events for the agent platform
+ */
+
+import type { Message, Task, SubagentRecord } from './types';
+
+// ---------------------------------------------------------------------------
+// Event Definitions
+// ---------------------------------------------------------------------------
+
+export interface EventMap {
+  // Message events
+  'message:received': { message: Message; channelId: string };
+  'message:sent': { message: Message; channelId: string };
+
+  // Agent lifecycle
+  'agent:start': { agentId: string; sessionId: string };
+  'agent:end': { agentId: string; sessionId: string; result?: string };
+  'agent:error': { agentId: string; error: Error };
+
+  // Subagent events
+  'subagent:spawn': { record: SubagentRecord };
+  'subagent:complete': { record: SubagentRecord };
+  'subagent:timeout': { record: SubagentRecord };
+
+  // Task events
+  'task:created': { task: Task };
+  'task:updated': { task: Task; changes: string[] };
+  'task:completed': { task: Task };
+  'task:blocked': { task: Task; blockedBy: string[] };
+
+  // Session events
+  'session:start': { sessionId: string };
+  'session:end': { sessionId: string };
+  'session:compact': { sessionId: string; beforeTokens: number; afterTokens: number };
+
+  // Tool events
+  'tool:call': { name: string; input: Record<string, unknown>; toolUseId: string };
+  'tool:result': { toolUseId: string; result: string; isError: boolean };
+
+  // Hook events
+  'hook:invoke': { event: string; sessionId: string; data?: Record<string, unknown> };
+  'hook:result': { event: string; sessionId: string; allow: boolean; error?: string };
+
+  // System events
+  'startup': { config: Record<string, unknown> };
+  'shutdown': { reason?: string };
+  'error': { error: Error; context?: string };
+
+  // Approval events
+  'approval:request': { id: string; command: string };
+  'approval:decision': { id: string; decision: string };
+  'approval:timeout': { id: string };
+}
+
+export type EventName = keyof EventMap;
+export type EventPayload<E extends EventName> = EventMap[E];
+export type EventHandler<E extends EventName> = (payload: EventPayload<E>) => void | Promise<void>;
+
+// ---------------------------------------------------------------------------
+// EventBus Implementation
+// ---------------------------------------------------------------------------
+
+interface ListenerEntry<E extends EventName> {
+  handler: EventHandler<E>;
+  once: boolean;
+}
+
+export class EventBus {
+  private listeners: Map<EventName, ListenerEntry<EventName>[]> = new Map();
+  private maxListeners: number;
+
+  constructor(options?: { maxListeners?: number }) {
+    this.maxListeners = options?.maxListeners ?? 100;
+  }
+
+  /**
+   * Subscribe to an event
+   * Returns an unsubscribe function
+   */
+  on<E extends EventName>(event: E, handler: EventHandler<E>): () => void {
+    return this.addListener(event, handler, false);
+  }
+
+  /**
+   * Subscribe to an event once
+   * Handler is automatically removed after first invocation
+   */
+  once<E extends EventName>(event: E, handler: EventHandler<E>): () => void {
+    return this.addListener(event, handler, true);
+  }
+
+  /**
+   * Emit an event to all subscribers
+   * Handlers are called in order of registration
+   * Errors in handlers do not stop other handlers from executing
+   */
+  async emit<E extends EventName>(event: E, payload: EventPayload<E>): Promise<void> {
+    const entries = this.listeners.get(event);
+    if (!entries || entries.length === 0) return;
+
+    // Create a copy to avoid mutation during iteration
+    const toExecute = [...entries];
+    const toRemove: ListenerEntry<EventName>[] = [];
+
+    for (const entry of toExecute) {
+      if (entry.once) {
+        toRemove.push(entry);
+      }
+
+      try {
+        await entry.handler(payload);
+      } catch (err) {
+        // Log error but continue executing other handlers
+        console.error(`EventBus: Error in handler for '${event}':`, err);
+      }
+    }
+
+    // Remove once handlers
+    if (toRemove.length > 0) {
+      const remaining = entries.filter(e => !toRemove.includes(e));
+      if (remaining.length === 0) {
+        this.listeners.delete(event);
+      } else {
+        this.listeners.set(event, remaining);
+      }
+    }
+  }
+
+  /**
+   * Remove all listeners for a specific event
+   */
+  off(event: EventName): void {
+    this.listeners.delete(event);
+  }
+
+  /**
+   * Remove all listeners for all events
+   */
+  clear(): void {
+    this.listeners.clear();
+  }
+
+  /**
+   * Get the number of listeners for an event
+   */
+  listenerCount(event: EventName): number {
+    return this.listeners.get(event)?.length ?? 0;
+  }
+
+  /**
+   * Get all event names with listeners
+   */
+  eventNames(): EventName[] {
+    return Array.from(this.listeners.keys());
+  }
+
+  private addListener<E extends EventName>(
+    event: E,
+    handler: EventHandler<E>,
+    once: boolean
+  ): () => void {
+    let entries = this.listeners.get(event);
+    if (!entries) {
+      entries = [];
+      this.listeners.set(event, entries);
+    }
+
+    if (entries.length >= this.maxListeners) {
+      console.warn(
+        `EventBus: Possible memory leak detected. ` +
+        `Event '${event}' has ${entries.length} listeners. ` +
+        `Max is ${this.maxListeners}.`
+      );
+    }
+
+    const entry: ListenerEntry<E> = { handler, once };
+    entries.push(entry as ListenerEntry<EventName>);
+
+    // Return unsubscribe function
+    return () => {
+      const currentEntries = this.listeners.get(event);
+      if (currentEntries) {
+        const index = currentEntries.indexOf(entry as ListenerEntry<EventName>);
+        if (index !== -1) {
+          currentEntries.splice(index, 1);
+          if (currentEntries.length === 0) {
+            this.listeners.delete(event);
+          }
+        }
+      }
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Global EventBus Instance
+// ---------------------------------------------------------------------------
+
+let globalEventBus: EventBus | null = null;
+
+export function createEventBus(options?: { maxListeners?: number }): EventBus {
+  globalEventBus = new EventBus(options);
+  return globalEventBus;
+}
+
+export function getEventBus(): EventBus {
+  if (!globalEventBus) {
+    globalEventBus = new EventBus();
+  }
+  return globalEventBus;
+}
