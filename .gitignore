@@ -1,14 +1,17 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Build Output
 dist/
 build/
 out/
+release/
 *.tsbuildinfo
 
 # Runtime & Cache
 .daemux/
+.claude/
 .bun/
 .turbo/
 
@@ -29,6 +32,8 @@ out/
 # OS Files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Testing & Coverage
 coverage/
@@ -50,6 +55,10 @@ logs/
 *.sqlite-wal
 *.db-shm
 *.db-wal
+
+# Linter Caches
+.eslintcache
+.oxlintcache
 
 # Yarn
 .pnp
