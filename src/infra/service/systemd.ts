@@ -88,11 +88,14 @@ WantedBy=default.target
 
   async status(name: string): Promise<ServiceInfo> {
     try {
-      const output = await this.runSystemctl(['show', name, '--property=ActiveState,MainPID']);
+      const output = await this.runSystemctl([
+        'show', name, '--property=ActiveState,MainPID,LoadState',
+      ]);
       const lines = output.split('\n');
 
       let status: ServiceStatus = 'unknown';
       let pid: number | undefined;
+      let loadState = '';
 
       for (const line of lines) {
         const [key, value] = line.split('=');
@@ -102,6 +105,15 @@ WantedBy=default.target
         if (key === 'MainPID' && value) {
           pid = parseInt(value, 10) || undefined;
         }
+        if (key === 'LoadState' && value) {
+          loadState = value;
+        }
+      }
+
+      // systemctl show returns ActiveState=inactive for non-existent services;
+      // LoadState=not-found means the unit does not exist on disk
+      if (loadState === 'not-found') {
+        return { name, status: 'not-installed' };
       }
 
       return { name, status, pid };
