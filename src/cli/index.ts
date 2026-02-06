@@ -5,13 +5,19 @@
  */
 
 import { Command } from 'commander';
+import { join } from 'path';
+import { homedir } from 'os';
 import { registerAuthCommands } from './auth';
 import { registerRunCommands, runCommand } from './run';
 import { registerPluginCommands } from './plugins';
 import { registerServiceCommands } from './service';
+import { registerUpdateCommands } from './update';
+import { registerUninstallCommand } from './uninstall';
+import { registerApprovalCommands } from './approvals';
 import { setConfig, getConfig } from '../core/config';
 import { initLogger } from '../infra/logger';
 import { version as packageVersion } from '../../package.json';
+import { Updater, loadStateSync, defaultState } from '../updater';
 
 // ---------------------------------------------------------------------------
 // Version Handling
@@ -68,6 +74,9 @@ function createProgram(): Command {
   registerRunCommands(program);
   registerPluginCommands(program);
   registerServiceCommands(program);
+  registerUpdateCommands(program);
+  registerUninstallCommand(program);
+  registerApprovalCommands(program);
 
   return program;
 }
@@ -76,23 +85,18 @@ function createProgram(): Command {
 // Error Handling
 // ---------------------------------------------------------------------------
 
+const FRIENDLY_ERRORS: [test: (msg: string) => boolean, label: string][] = [
+  [(m) => m.includes('ENOENT'), 'File or directory not found'],
+  [(m) => m.includes('EACCES'), 'Permission denied'],
+  [(m) => m.includes('ECONNREFUSED'), 'Connection refused'],
+  [(m) => m.includes('authentication') || m.includes('401'), 'Authentication failed. Check your credentials.'],
+  [(m) => m.includes('rate limit') || m.includes('429'), 'Rate limit exceeded. Please wait and try again.'],
+];
+
 function handleError(err: unknown): never {
   const message = err instanceof Error ? err.message : String(err);
-
-  // Check for common errors and provide helpful messages
-  if (message.includes('ENOENT')) {
-    console.error('Error: File or directory not found');
-  } else if (message.includes('EACCES')) {
-    console.error('Error: Permission denied');
-  } else if (message.includes('ECONNREFUSED')) {
-    console.error('Error: Connection refused');
-  } else if (message.includes('authentication') || message.includes('401')) {
-    console.error('Error: Authentication failed. Check your credentials.');
-  } else if (message.includes('rate limit') || message.includes('429')) {
-    console.error('Error: Rate limit exceeded. Please wait and try again.');
-  } else {
-    console.error(`Error: ${message}`);
-  }
+  const friendly = FRIENDLY_ERRORS.find(([test]) => test(message));
+  console.error(`Error: ${friendly ? friendly[1] : message}`);
 
   // In debug mode, show full stack trace
   if (process.env.DEBUG || process.argv.includes('--debug')) {
@@ -118,6 +122,35 @@ process.on('uncaughtException', (err) => {
 });
 
 // ---------------------------------------------------------------------------
+// Background Update Check
+// ---------------------------------------------------------------------------
+
+function checkForUpdatesInBackground(): void {
+  try {
+    const state = defaultState();
+    if (state.disabled) return;
+
+    const stateDir = join(homedir(), '.local', 'share', 'daemux');
+    const statePath = join(stateDir, 'update-state.json');
+    const persisted = loadStateSync(statePath);
+
+    // Show notification if a pending update exists
+    if (persisted.pendingUpdate?.verified && persisted.availableVersion) {
+      const ver = persisted.availableVersion;
+      console.error(`\x1b[33mUpdate available: v${ver}\x1b[0m  Run \x1b[36mdaemux update\x1b[0m to apply.\n`);
+    }
+
+    // Only spawn a background check if enough time has elapsed
+    const elapsed = Date.now() - persisted.lastCheckTime;
+    if (elapsed < persisted.checkIntervalMs) return;
+
+    Updater.checkInBackground();
+  } catch {
+    // Never block CLI startup for update checks
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Entry Point
 // ---------------------------------------------------------------------------
 
@@ -129,6 +162,9 @@ async function main(): Promise<void> {
   const hasCommand = args.length > 0 && args[0] && !args[0].startsWith('-');
   const isHelpOrVersion = args.includes('--help') || args.includes('-h') ||
                           args.includes('--version') || args.includes('-V');
+
+  // Run background update check before parsing commands
+  checkForUpdatesInBackground();
 
   if (!hasCommand && !isHelpOrVersion) {
     // Manually parse and apply global options since preAction hook won't fire

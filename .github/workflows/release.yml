@@ -1,0 +1,52 @@
+# Release Pipeline
+# Triggered by pushing a version tag (e.g. v0.1.0).
+# Builds cross-platform binaries, creates a GitHub Release with tarballs,
+# and commits the updated manifest.json back to main.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build release artifacts
+        run: CROSS_COMPILE=1 bash scripts/build-release.sh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+        with:
+          files: release/*.tar.gz
+          generate_release_notes: true
+
+      - name: Commit manifest.json to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git add manifest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: update manifest.json for ${GITHUB_REF_NAME}"
+          git pull --rebase origin main
+          git push origin main
