@@ -11,6 +11,7 @@ export interface SessionRow {
   queue_mode: string;
   active_channel_id: string | null;
   current_task_id: string | null;
+  thinking_level: string | null;
   flags: string;
 }
 

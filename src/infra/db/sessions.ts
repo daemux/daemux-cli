@@ -19,6 +19,7 @@ export function createSessionsRepository(db: BunSQLite) {
     queueMode: row.queue_mode as Session['queueMode'],
     activeChannelId: row.active_channel_id ?? undefined,
     currentTaskId: row.current_task_id ?? undefined,
+    thinkingLevel: (row.thinking_level as Session['thinkingLevel']) ?? undefined,
     flags: JSON.parse(row.flags || '{}'),
   });
 
@@ -28,8 +29,8 @@ export function createSessionsRepository(db: BunSQLite) {
       const now = Date.now();
       db.run(
         `INSERT INTO sessions (id, created_at, last_activity, compaction_count, total_tokens_used,
-         queue_mode, active_channel_id, current_task_id, flags)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         queue_mode, active_channel_id, current_task_id, thinking_level, flags)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           session.createdAt ?? now,
@@ -39,6 +40,7 @@ export function createSessionsRepository(db: BunSQLite) {
           session.queueMode ?? 'steer',
           session.activeChannelId ?? null,
           session.currentTaskId ?? null,
+          session.thinkingLevel ?? null,
           JSON.stringify(session.flags ?? {}),
         ]
       );
@@ -77,6 +79,10 @@ export function createSessionsRepository(db: BunSQLite) {
       if (updates.currentTaskId !== undefined) {
         fields.push('current_task_id = ?');
         values.push(updates.currentTaskId);
+      }
+      if (updates.thinkingLevel !== undefined) {
+        fields.push('thinking_level = ?');
+        values.push(updates.thinkingLevel);
       }
       if (updates.flags !== undefined) {
         fields.push('flags = ?');

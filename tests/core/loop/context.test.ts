@@ -9,6 +9,7 @@ import { existsSync, unlinkSync } from 'fs';
 import { Database } from '../../../src/infra/database';
 import { EventBus } from '../../../src/core/event-bus';
 import { ContextBuilder } from '../../../src/core/loop/context';
+import { validateChain, updateActivity } from '../../../src/core/loop/compaction';
 import type { Config, Message } from '../../../src/core/types';
 import { createReadyMockProvider, MockLLMProvider } from '../../mocks/mock-llm-provider';
 
@@ -431,7 +432,7 @@ describe('ContextBuilder', () => {
         createdAt: Date.now(),
       });
 
-      const result = contextBuilder.validateChain(session.id);
+      const result = validateChain(db, session.id);
 
       expect(result.valid).toBe(true);
     });
@@ -446,7 +447,7 @@ describe('ContextBuilder', () => {
         flags: {},
       });
 
-      const result = contextBuilder.validateChain(session.id);
+      const result = validateChain(db, session.id);
 
       expect(result.valid).toBe(true);
     });
@@ -463,7 +464,7 @@ describe('ContextBuilder', () => {
         flags: {},
       });
 
-      await contextBuilder.updateActivity(session.id, 500);
+      await updateActivity(db, session.id, 500);
 
       const updated = db.sessions.get(session.id);
       expect(updated?.totalTokensUsed).toBe(1500);
@@ -472,7 +473,7 @@ describe('ContextBuilder', () => {
 
     it('should handle non-existent session', async () => {
       // Should not throw
-      await contextBuilder.updateActivity('nonexistent', 500);
+      await updateActivity(db, 'nonexistent', 500);
     });
   });
 });

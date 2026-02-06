@@ -114,6 +114,7 @@ const ENV_MAPPINGS: EnvMapping[] = [
   { envKey: 'AGENT_ID', configKey: 'agentId', transform: (v) => v },
   { envKey: 'AGENT_NAME', configKey: 'agentName', transform: (v) => v },
   { envKey: 'AGENT_DATA_DIR', configKey: 'dataDir', transform: (v) => v },
+  { envKey: 'ANTHROPIC_LOG', configKey: 'debug', transform: (v: string) => v.toLowerCase() === 'debug' },
 ];
 
 function loadEnvConfig(prefix?: string): Partial<Config> {
@@ -245,23 +246,18 @@ export class ConfigLoader {
   }
 
   private mapSettingsToConfig(settings: SettingsFile): Partial<Config> {
+    const SETTINGS_KEYS: Array<keyof SettingsFile> = [
+      'model', 'maxTokens', 'compactionThreshold', 'effectiveContextWindow',
+      'queueMode', 'collectWindowMs', 'hookTimeoutMs', 'turnTimeoutMs',
+      'debug', 'mcpDebug', 'heartbeatIntervalMs', 'heartbeatEnabled',
+    ];
+
     const config: Partial<Config> = {};
-
-    if (settings.model !== undefined) {
-      config.model = settings.model as Config['model'];
+    for (const key of SETTINGS_KEYS) {
+      if (settings[key] !== undefined) {
+        (config as Record<string, unknown>)[key] = settings[key];
+      }
     }
-    if (settings.maxTokens !== undefined) config.maxTokens = settings.maxTokens;
-    if (settings.compactionThreshold !== undefined) config.compactionThreshold = settings.compactionThreshold;
-    if (settings.effectiveContextWindow !== undefined) config.effectiveContextWindow = settings.effectiveContextWindow;
-    if (settings.queueMode !== undefined) config.queueMode = settings.queueMode;
-    if (settings.collectWindowMs !== undefined) config.collectWindowMs = settings.collectWindowMs;
-    if (settings.hookTimeoutMs !== undefined) config.hookTimeoutMs = settings.hookTimeoutMs;
-    if (settings.turnTimeoutMs !== undefined) config.turnTimeoutMs = settings.turnTimeoutMs;
-    if (settings.debug !== undefined) config.debug = settings.debug;
-    if (settings.mcpDebug !== undefined) config.mcpDebug = settings.mcpDebug;
-    if (settings.heartbeatIntervalMs !== undefined) config.heartbeatIntervalMs = settings.heartbeatIntervalMs;
-    if (settings.heartbeatEnabled !== undefined) config.heartbeatEnabled = settings.heartbeatEnabled;
-
     return config;
   }
 }

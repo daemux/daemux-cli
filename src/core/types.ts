@@ -85,6 +85,7 @@ export const SessionSchema = z.object({
   queueMode: z.enum(['steer', 'interrupt', 'queue', 'collect']),
   activeChannelId: z.string().optional(),
   currentTaskId: z.string().optional(),
+  thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
   flags: z.record(z.unknown()).default({}),
 });
 

@@ -15,15 +15,15 @@ import {
   onShutdown,
   bold,
   dim,
-  error,
   color,
 } from './utils';
 import { loadConfig } from '../core/config';
 import { Database } from '../infra/database';
 import { createEventBus } from '../core/event-bus';
 import { AgenticLoop, createAgenticLoop } from '../core/loop';
-import type { StreamChunk } from '../core/loop/types';
 import { initLogger } from '../infra/logger';
+import { AnthropicProvider } from './anthropic-provider';
+import { createStreamHandler, printStats } from './run-output';
 
 // ---------------------------------------------------------------------------
 // Session Management
@@ -47,75 +47,67 @@ function setupDataDir(dataDir: string): DataDirSetup {
 }
 
 // ---------------------------------------------------------------------------
-// Stream Output Handler
-// ---------------------------------------------------------------------------
-
-function createStreamHandler(): (chunk: StreamChunk) => void {
-  let currentToolId: string | null = null;
-
-  return (chunk: StreamChunk) => {
-    switch (chunk.type) {
-      case 'text':
-        process.stdout.write(chunk.content);
-        break;
-
-      case 'tool_start':
-        if (currentToolId) {
-          process.stdout.write('\n');
-        }
-        process.stdout.write(dim(`\n[Calling ${chunk.name}...]\n`));
-        currentToolId = chunk.toolUseId;
-        break;
-
-      case 'tool_result':
-        if (chunk.isError) {
-          process.stdout.write(error(`[Tool error: ${truncateResult(chunk.result)}]\n`));
-        } else {
-          process.stdout.write(dim(`[Result: ${truncateResult(chunk.result)}]\n`));
-        }
-        currentToolId = null;
-        break;
-
-      case 'thinking':
-        process.stdout.write(dim(`\n[Thinking: ${chunk.content}]\n`));
-        break;
-
-      case 'done':
-        process.stdout.write('\n');
-        break;
-    }
-  };
-}
-
-function truncateResult(result: string, maxLen = 100): string {
-  if (result.length <= maxLen) return result;
-  return result.slice(0, maxLen) + '...';
-}
-
-// ---------------------------------------------------------------------------
 // Interactive Mode
 // ---------------------------------------------------------------------------
 
-function printStats(tokensIn: number, tokensOut: number, toolCount: number, durationMs: number): void {
-  const time = (durationMs / 1000).toFixed(1);
-  console.log(dim(`\n[Tokens: ${tokensIn}/${tokensOut} | Tools: ${toolCount} | Time: ${time}s]`));
+function createReadlineInterface(): ReturnType<typeof createInterface> {
+  return createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: `${color('>', 'cyan')} `,
+  });
+}
+
+async function processInteractiveInput(
+  input: string,
+  loop: AgenticLoop,
+  ctx: { sessionId?: string; running: boolean; streamHandler: ReturnType<typeof createStreamHandler> },
+  rl: ReturnType<typeof createInterface>,
+): Promise<void> {
+  const trimmed = input.trim();
+
+  if (trimmed === 'exit' || trimmed === 'quit') {
+    console.log(dim('Goodbye!'));
+    rl.close();
+    process.exit(0);
+  }
+
+  if (!trimmed) {
+    rl.prompt();
+    return;
+  }
+
+  if (trimmed.startsWith('/')) {
+    await handleCommand(trimmed, loop);
+    rl.prompt();
+    return;
+  }
+
+  ctx.running = true;
+  console.log();
+
+  try {
+    const result = await loop.run(trimmed, { sessionId: ctx.sessionId, onStream: ctx.streamHandler });
+    ctx.sessionId = result.sessionId;
+    printStats(result.tokensUsed.input, result.tokensUsed.output, result.toolCalls.length, result.durationMs);
+  } catch (err) {
+    printError(err);
+  }
+
+  ctx.running = false;
+  console.log();
+  rl.prompt();
 }
 
 async function runInteractive(loop: AgenticLoop, sessionId?: string): Promise<void> {
   console.log(bold('\nAgent Interactive Session'));
   console.log(dim('Type your message and press Enter. Type "exit" or press Ctrl+C to quit.\n'));
 
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: `${color('>', 'cyan')} `,
-  });
-
-  let running = false;
-  const streamHandler = createStreamHandler();
+  const rl = createReadlineInterface();
+  const ctx = { sessionId, running: false, streamHandler: createStreamHandler() };
 
   rl.on('SIGINT', () => {
-    if (running) {
+    if (ctx.running) {
       loop.interrupt();
       console.log(dim('\nInterrupted. Waiting for current turn to finish...'));
     } else {
@@ -125,76 +117,41 @@ async function runInteractive(loop: AgenticLoop, sessionId?: string): Promise<vo
     }
   });
 
-  const processInput = async (input: string) => {
-    const trimmed = input.trim();
-
-    if (trimmed === 'exit' || trimmed === 'quit') {
-      console.log(dim('Goodbye!'));
-      rl.close();
-      process.exit(0);
-    }
-
-    if (!trimmed) {
-      rl.prompt();
-      return;
-    }
-
-    if (trimmed.startsWith('/')) {
-      await handleCommand(trimmed, loop);
-      rl.prompt();
-      return;
-    }
-
-    running = true;
-    console.log();
-
-    try {
-      const result = await loop.run(trimmed, { sessionId, onStream: streamHandler });
-      sessionId = result.sessionId;
-      printStats(result.tokensUsed.input, result.tokensUsed.output, result.toolCalls.length, result.durationMs);
-    } catch (err) {
-      printError(err);
-    }
-
-    running = false;
-    console.log();
-    rl.prompt();
-  };
-
-  rl.on('line', processInput);
+  rl.on('line', (input: string) => processInteractiveInput(input, loop, ctx, rl));
   rl.prompt();
 }
 
 async function handleCommand(cmd: string, loop: AgenticLoop): Promise<void> {
   const [command] = cmd.slice(1).split(' ');
 
-  if (command === 'help') {
-    console.log(bold('\nAvailable Commands:'));
-    console.log('  /help     - Show this help message');
-    console.log('  /session  - Show current session ID');
-    console.log('  /clear    - Clear screen');
-    console.log('  /exit     - Exit the session');
-    console.log();
-    return;
-  }
+  switch (command) {
+    case 'help':
+      console.log(bold('\nAvailable Commands:'));
+      console.log('  /help     - Show this help message');
+      console.log('  /session  - Show current session ID');
+      console.log('  /clear    - Clear screen');
+      console.log('  /exit     - Exit the session');
+      console.log();
+      return;
 
-  if (command === 'session') {
-    const session = loop.getSession();
-    printInfo(session ? `Current session: ${session}` : 'No active session');
-    return;
-  }
+    case 'session': {
+      const session = loop.getSession();
+      printInfo(session ? `Current session: ${session}` : 'No active session');
+      return;
+    }
 
-  if (command === 'clear') {
-    console.clear();
-    return;
-  }
+    case 'clear':
+      console.clear();
+      return;
 
-  if (command === 'exit' || command === 'quit') {
-    console.log(dim('Goodbye!'));
-    process.exit(0);
-  }
+    case 'exit':
+    case 'quit':
+      console.log(dim('Goodbye!'));
+      process.exit(0);
 
-  printWarning(`Unknown command: ${command}. Type /help for available commands.`);
+    default:
+      printWarning(`Unknown command: ${command}. Type /help for available commands.`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -270,11 +227,14 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
     process.exit(1);
   }
 
+  const provider = new AnthropicProvider();
+  await provider.initialize({ type: credentials.type, value: credentials.value });
+
   const loop = createAgenticLoop({
     db,
     eventBus: createEventBus(),
     config,
-    credentials,
+    provider,
   });
 
   onShutdown(async () => {

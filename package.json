@@ -14,6 +14,7 @@
     "test": "bun test",
     "lint": "oxlint src/",
     "typecheck": "tsc --noEmit",
+    "compile": "bun build --compile --outfile=dist/daemux ./src/cli/index.ts",
     "setup": "./scripts/setup.sh",
     "postinstall": "./scripts/setup.sh"
   },

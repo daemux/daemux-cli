@@ -100,6 +100,68 @@ export {
   type TaskUpdateInput,
 } from './task-manager';
 
+// Hook Manager
+export {
+  HookManager,
+  createHookManager,
+  getHookManager,
+} from './hook-manager';
+
+// Approval Manager
+export {
+  ApprovalManager,
+  createApprovalManager,
+  getApprovalManager,
+} from './approval-manager';
+
+// Heartbeat Manager
+export {
+  HeartbeatManager,
+  createHeartbeatManager,
+  getHeartbeatManager,
+  type HeartbeatContext,
+} from './heartbeat-manager';
+
+// Cron Service
+export {
+  CronService,
+  createCronService,
+  getCronService,
+  parseExpression,
+} from './cron-service';
+
+// Cron Expression Helpers
+export {
+  calcNextRun,
+  recalcNextRunForExisting,
+} from './cron-expression';
+
+// Cron Parser
+export {
+  parseCronExpression,
+  nextCronRun,
+} from './cron-parser';
+
+// MCP Client
+export {
+  StdioMCPClient,
+  createMCPClient,
+} from './mcp-client';
+
+// Human Behavior
+export {
+  HumanBehavior,
+  createHumanBehavior,
+  type HumanBehaviorConfig,
+} from './human-behavior';
+
+// Session Persistence
+export {
+  SessionPersistence,
+  createSessionPersistence,
+  type SessionFileInfo,
+} from './session-persistence';
+
 // Agentic Loop
 export {
   AgenticLoop,

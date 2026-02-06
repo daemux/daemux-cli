@@ -4,6 +4,7 @@
  */
 
 import type { Message, Task, SubagentRecord } from './types';
+import type { HeartbeatContext } from './heartbeat-manager';
 
 // ---------------------------------------------------------------------------
 // Event Definitions
@@ -52,6 +53,16 @@ export interface EventMap {
   'approval:request': { id: string; command: string };
   'approval:decision': { id: string; decision: string };
   'approval:timeout': { id: string };
+
+  // Heartbeat events
+  'heartbeat:started': { intervalMs: number };
+  'heartbeat:stopped': Record<string, never>;
+  'heartbeat:check': { context: HeartbeatContext };
+
+  // Schedule events
+  'schedule:started': Record<string, never>;
+  'schedule:stopped': Record<string, never>;
+  'schedule:triggered': { scheduleId: string; taskTemplate: { subject: string; description: string } };
 }
 
 export type EventName = keyof EventMap;
@@ -100,26 +111,24 @@ export class EventBus {
     const entries = this.listeners.get(event);
     if (!entries || entries.length === 0) return;
 
-    // Create a copy to avoid mutation during iteration
-    const toExecute = [...entries];
-    const toRemove: ListenerEntry<EventName>[] = [];
+    // Copy to avoid mutation during iteration
+    const snapshot = [...entries];
+    let hasOnce = false;
 
-    for (const entry of toExecute) {
-      if (entry.once) {
-        toRemove.push(entry);
-      }
-
+    for (const entry of snapshot) {
+      if (entry.once) hasOnce = true;
       try {
         await entry.handler(payload);
       } catch (err) {
-        // Log error but continue executing other handlers
         console.error(`EventBus: Error in handler for '${event}':`, err);
       }
     }
 
-    // Remove once handlers
-    if (toRemove.length > 0) {
-      const remaining = entries.filter(e => !toRemove.includes(e));
+    // Remove only the once-handlers that were actually fired in this emit cycle.
+    // Handlers registered during the emit cycle are not in the snapshot and are preserved.
+    if (hasOnce) {
+      const onceFired = new Set(snapshot.filter(e => e.once));
+      const remaining = entries.filter(e => !onceFired.has(e));
       if (remaining.length === 0) {
         this.listeners.delete(event);
       } else {

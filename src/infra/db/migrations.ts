@@ -17,6 +17,9 @@ export function runMigrations(db: BunSQLite, vecEnabled: boolean): void {
   if (currentVersion < 1) {
     applyMigrationV1(db, vecEnabled);
   }
+  if (currentVersion < 2) {
+    applyMigrationV2(db);
+  }
 }
 
 function getCurrentSchemaVersion(db: BunSQLite): number {
@@ -167,4 +170,9 @@ function applyMigrationV1(db: BunSQLite, vecEnabled: boolean): void {
   db.run('CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit(timestamp DESC)');
 
   db.run('INSERT INTO schema_version (version, applied_at) VALUES (1, ?)', [Date.now()]);
+}
+
+function applyMigrationV2(db: BunSQLite): void {
+  db.run('ALTER TABLE sessions ADD COLUMN thinking_level TEXT');
+  db.run('INSERT INTO schema_version (version, applied_at) VALUES (2, ?)', [Date.now()]);
 }

@@ -15,6 +15,7 @@ import {
   BUILTIN_TOOLS,
   ContextBuilder,
   ToolExecutor,
+  defaultSystemPrompt,
 } from '../../../src/core/loop/index';
 import type { Config } from '../../../src/core/types';
 import { createReadyMockProvider, MockLLMProvider } from '../../mocks/mock-llm-provider';
@@ -209,18 +210,9 @@ describe('AgenticLoop', () => {
     });
   });
 
-  describe('buildSystemPrompt', () => {
+  describe('defaultSystemPrompt', () => {
     it('should use agent system prompt if provided', () => {
-      const loop = new AgenticLoop({
-        db,
-        eventBus,
-        config: testConfig,
-        provider: mockProvider,
-      });
-
-      const buildPrompt = (loop as any).buildSystemPrompt.bind(loop);
-
-      const result = buildPrompt({
+      const result = defaultSystemPrompt({
         agent: {
           name: 'test-agent',
           systemPrompt: 'Custom system prompt',
@@ -234,16 +226,7 @@ describe('AgenticLoop', () => {
     });
 
     it('should use default prompt when no agent', () => {
-      const loop = new AgenticLoop({
-        db,
-        eventBus,
-        config: testConfig,
-        provider: mockProvider,
-      });
-
-      const buildPrompt = (loop as any).buildSystemPrompt.bind(loop);
-
-      const result = buildPrompt({});
+      const result = defaultSystemPrompt({});
 
       expect(result).toContain('helpful');
     });

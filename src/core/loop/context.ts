@@ -3,27 +3,15 @@
  * Manages conversation context and token-aware summarization
  */
 
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import type { Message, Config } from '../types';
 import type { Database } from '../../infra/database';
 import type { EventBus } from '../event-bus';
 import type { LLMProvider } from '../plugin-api-types';
 import type { SessionContext, APIMessage, ContentBlock } from './types';
+import { summarizeAndReplace, updateCompactionStats, validateChain, updateActivity } from './compaction';
 import { getLogger } from '../../infra/logger';
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const COMPACTION_PROMPT = `Summarize the following conversation while preserving:
-1. Key facts and decisions made
-2. Current task state and progress
-3. Important user preferences or context
-4. Any errors or issues that need to be remembered
-
-Be concise but complete. This summary will replace the conversation history.`;
-
-// Model used for compaction (lightweight, fast)
-const COMPACTION_MODEL = 'claude-haiku-3-5-20250514';
 
 // ---------------------------------------------------------------------------
 // Context Builder Class
@@ -34,6 +22,7 @@ export class ContextBuilder {
   private eventBus: EventBus;
   private config: Config;
   private provider: LLMProvider;
+  private agentContextCache: string | null | undefined = undefined;
 
   constructor(options: {
     db: Database;
@@ -45,6 +34,55 @@ export class ContextBuilder {
     this.eventBus = options.eventBus;
     this.config = options.config;
     this.provider = options.provider;
+  }
+
+  /**
+   * Load AGENT.md project context from .daemux/AGENT.md.
+   * Caches the result so the file is only read once per ContextBuilder instance.
+   */
+  async loadAgentContext(): Promise<string | null> {
+    if (this.agentContextCache !== undefined) {
+      return this.agentContextCache;
+    }
+
+    const agentMdPath = join(process.cwd(), '.daemux', 'AGENT.md');
+
+    try {
+      if (!existsSync(agentMdPath)) {
+        this.agentContextCache = null;
+        return null;
+      }
+
+      const content = readFileSync(agentMdPath, 'utf-8').trim();
+      if (content.length === 0) {
+        this.agentContextCache = null;
+        return null;
+      }
+
+      this.agentContextCache = content;
+      getLogger().debug('Loaded AGENT.md project context', {
+        path: agentMdPath,
+        length: content.length,
+      });
+      return content;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      getLogger().warn('Failed to load AGENT.md', { path: agentMdPath, error: msg });
+      this.agentContextCache = null;
+      return null;
+    }
+  }
+
+  /**
+   * Build a system prompt with optional AGENT.md context appended.
+   */
+  async buildSystemPrompt(basePrompt: string): Promise<string> {
+    const agentContext = await this.loadAgentContext();
+    if (!agentContext) {
+      return basePrompt;
+    }
+
+    return `${basePrompt}\n\n--- Project Context (AGENT.md) ---\n${agentContext}\n---`;
   }
 
   /**
@@ -140,78 +178,14 @@ export class ContextBuilder {
       return { summary: '', beforeTokens, afterTokens: beforeTokens };
     }
 
-    // Build conversation text for summarization
-    const conversationText = messages
-      .map((m) => {
-        const content = typeof m.content === 'string'
-          ? m.content
-          : JSON.stringify(m.content);
-        return `${m.role.toUpperCase()}: ${content}`;
-      })
-      .join('\n\n');
-
-    // Call provider for summarization using compactionChat
-    const response = await this.provider.compactionChat({
-      model: COMPACTION_MODEL,
-      messages: [{ role: 'user', content: conversationText }],
-      maxTokens: 2000,
-      systemPrompt: COMPACTION_PROMPT,
-    });
-
-    // Extract text from response
-    const summaryBlock = response.content.find((b) => b.type === 'text');
-    const summary = summaryBlock?.text ?? '';
-
-    // Delete old messages
-    this.db.messages.deleteSession(sessionId);
-
-    // Add summary as first message
-    this.addMessage(sessionId, 'system', `[Previous conversation summary]\n\n${summary}`);
-
+    const summary = await summarizeAndReplace(
+      this.provider, this.db, sessionId, messages, this.addMessage.bind(this),
+    );
     const afterTokens = this.db.messages.getTokenCount(sessionId);
 
-    // Update session compaction count
-    const session = await this.db.sessions.get(sessionId);
-    if (session) {
-      await this.db.sessions.update(sessionId, {
-        compactionCount: session.compactionCount + 1,
-        lastActivity: Date.now(),
-      });
-    }
-
-    await this.eventBus.emit('session:compact', {
-      sessionId,
-      beforeTokens,
-      afterTokens,
-    });
-
-    getLogger().info('Session compacted', {
-      sessionId,
-      beforeTokens,
-      afterTokens,
-      reduction: `${Math.round((1 - afterTokens / beforeTokens) * 100)}%`,
-    });
+    await updateCompactionStats(this.db, this.eventBus, sessionId, beforeTokens, afterTokens);
 
     return { summary, beforeTokens, afterTokens };
   }
 
-  /**
-   * Validate message chain integrity
-   */
-  validateChain(sessionId: string): { valid: boolean; brokenAt?: string } {
-    return this.db.messages.validateChain(sessionId);
-  }
-
-  /**
-   * Update session activity
-   */
-  async updateActivity(sessionId: string, tokensUsed: number): Promise<void> {
-    const session = await this.db.sessions.get(sessionId);
-    if (session) {
-      await this.db.sessions.update(sessionId, {
-        lastActivity: Date.now(),
-        totalTokensUsed: session.totalTokensUsed + tokensUsed,
-      });
-    }
-  }
 }
