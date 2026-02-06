@@ -119,7 +119,7 @@ export class SseMCPClient implements MCPServer {
       throw new Error(`MCP SSE server '${this.id}' returned ${response.status}`);
     }
 
-    const reader = response.body?.getReader();
+    const reader = response.body?.getReader() as ReadableStreamDefaultReader<Uint8Array> | undefined;
     if (!reader) throw new Error(`MCP SSE server '${this.id}' returned no body`);
 
     const decoder = new TextDecoder();
