@@ -13,7 +13,6 @@ export interface ServiceConfig {
   execPath: string;
   args?: string[];
   workingDirectory?: string;
-  workingDir?: string;
   env?: Record<string, string>;
   user?: string;
   logPath?: string;

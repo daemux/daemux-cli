@@ -165,13 +165,13 @@ describe('Auth Interactive Commands', () => {
       const headers = {
         'accept': 'application/json',
         'anthropic-dangerous-direct-browser-access': 'true',
-        'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
+        'anthropic-beta': 'oauth-2025-04-20',
         'user-agent': `claude-cli/${claudeCodeVersion} (external, cli)`,
         'x-app': 'cli',
       };
 
       expect(headers['accept']).toBe('application/json');
-      expect(headers['anthropic-beta']).toContain('claude-code');
+      expect(headers['anthropic-beta']).toContain('oauth');
       expect(headers['user-agent']).toContain('claude-cli');
     });
   });

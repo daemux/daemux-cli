@@ -6,6 +6,7 @@
 import { Command } from 'commander';
 import { createInterface } from 'readline';
 import { join } from 'path';
+import { homedir } from 'os';
 import { existsSync, mkdirSync } from 'fs';
 import { resolveCredentials, hasValidCredentials } from './auth';
 import {
@@ -22,8 +23,34 @@ import { Database } from '../infra/database';
 import { createEventBus } from '../core/event-bus';
 import { AgenticLoop, createAgenticLoop } from '../core/loop';
 import { initLogger } from '../infra/logger';
-import { AnthropicProvider } from './anthropic-provider';
 import { createStreamHandler, printStats } from './run-output';
+import { initializeChannels } from './run-channels';
+
+// ---------------------------------------------------------------------------
+// Anthropic Provider Loader
+// ---------------------------------------------------------------------------
+
+import type { LLMProvider } from '../core/plugin-api-types';
+
+async function loadAnthropicProvider(): Promise<LLMProvider> {
+  const paths = [
+    join(homedir(), '.daemux', 'plugins', 'anthropic-provider', 'dist', 'index.js'),
+    join(__dirname, '..', '..', '..', 'daemux-plugins', 'llm-providers', 'anthropic-provider', 'dist', 'index.js'),
+  ];
+
+  for (const p of paths) {
+    if (existsSync(p)) {
+      const mod = await import(p);
+      const provider = mod.createProvider() as LLMProvider;
+      return provider;
+    }
+  }
+
+  throw new Error(
+    'Anthropic provider plugin not found. Install it to ~/.daemux/plugins/anthropic-provider/ ' +
+    'or run: daemux plugins install @daemux/anthropic-provider',
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Session Management
@@ -215,7 +242,7 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
   config.debug = options.debug || config.debug;
   config.mcpDebug = options.mcpDebug || config.mcpDebug;
 
-  initLogger({ level: config.debug ? 'debug' : 'info', dataDir: config.dataDir });
+  const logger = await initLogger({ level: config.debug ? 'debug' : 'info', dataDir: config.dataDir });
   const { dbPath } = setupDataDir(config.dataDir);
 
   const db = new Database({ path: dbPath, enableVec: true });
@@ -227,26 +254,61 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
     process.exit(1);
   }
 
-  const provider = new AnthropicProvider();
+  if (credentials.source === 'claude-keychain') {
+    const isServiceMode = !process.stdin.isTTY && !options.message;
+    if (isServiceMode) {
+      printWarning(
+        'Using Claude Code keychain token. These tokens are restricted to Claude Code ' +
+        'and will NOT work for API calls. Add "anthropicApiKey" to ~/.daemux/settings.json ' +
+        'or run: daemux auth api-key --provider anthropic',
+      );
+    }
+  }
+
+  const provider = await loadAnthropicProvider();
   await provider.initialize({ type: credentials.type, value: credentials.value });
 
-  const loop = createAgenticLoop({
-    db,
-    eventBus: createEventBus(),
-    config,
-    provider,
-  });
+  const eventBus = createEventBus();
+  const loop = createAgenticLoop({ db, eventBus, config, provider });
+
+  // Initialize channels (Telegram, etc.)
+  const { router, channelIds } = await initializeChannels(eventBus, loop, logger);
+
+  let cleanedUp = false;
+  async function cleanup(): Promise<void> {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (router) await router.stop();
+    db.close();
+  }
 
   onShutdown(async () => {
-    if (loop.isRunning()) loop.interrupt();
-    db.close();
+    const forceTimer = setTimeout(() => process.exit(1), 5000);
+    try {
+      if (loop.isRunning()) loop.interrupt();
+      await cleanup();
+    } finally {
+      clearTimeout(forceTimer);
+    }
   });
 
   if (options.message) {
+    // Single message mode
     await runSingleMessage(loop, options.message, options.session, !options.quiet);
-    db.close();
-  } else {
+    await cleanup();
+  } else if (process.stdin.isTTY) {
+    // Interactive terminal mode (channels also active in background)
     await runInteractive(loop, options.session);
+  } else if (router && channelIds.length > 0) {
+    // Service mode: no terminal, channels are the only input
+    logger.info('Running in service mode with channels', { channels: channelIds.join(', ') });
+    // Process stays alive via TelegramPoller's setInterval.
+    // Shutdown handled by SIGTERM/SIGINT via onShutdown().
+  } else {
+    // No terminal and no channels - nothing to do
+    printError('No input source available. Configure channels or run interactively.');
+    db.close();
+    process.exit(1);
   }
 }
 

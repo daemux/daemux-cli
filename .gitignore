@@ -49,6 +49,7 @@ logs/
 *.temp
 *.bak
 *.pid
+tmp-test/
 
 # Database Artifacts
 *.sqlite-shm

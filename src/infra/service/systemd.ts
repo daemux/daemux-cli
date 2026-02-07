@@ -34,7 +34,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=${config.execPath}${config.args?.length ? ' ' + config.args.join(' ') : ''}
-WorkingDirectory=${config.workingDir ?? homedir()}
+WorkingDirectory=${config.workingDirectory ?? homedir()}
 Restart=on-failure
 RestartSec=5
 ${envLines}

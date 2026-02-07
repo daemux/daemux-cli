@@ -47,7 +47,7 @@ ${programArgs}
   <key>KeepAlive</key>
   <true/>
   <key>WorkingDirectory</key>
-  <string>${config.workingDir ?? homedir()}</string>
+  <string>${config.workingDirectory ?? homedir()}</string>
   <key>StandardOutPath</key>
   <string>${join(homedir(), '.daemux', 'logs', `${config.name}.out.log`)}</string>
   <key>StandardErrorPath</key>

@@ -16,8 +16,8 @@ export class WindowsServiceManager implements PlatformServiceManager {
       await this.runNssm(['set', config.name, 'AppParameters', config.args.join(' ')]);
     }
 
-    if (config.workingDir) {
-      await this.runNssm(['set', config.name, 'AppDirectory', config.workingDir]);
+    if (config.workingDirectory) {
+      await this.runNssm(['set', config.name, 'AppDirectory', config.workingDirectory]);
     }
 
     if (config.description) {

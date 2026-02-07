@@ -290,7 +290,7 @@ describe('Credentials Full Coverage', () => {
             defaultHeaders: {
               'accept': 'application/json',
               'anthropic-dangerous-direct-browser-access': 'true',
-              'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
+              'anthropic-beta': 'oauth-2025-04-20',
               'user-agent': `claude-cli/${claudeCodeVersion} (external, cli)`,
               'x-app': 'cli',
             }

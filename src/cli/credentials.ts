@@ -106,14 +106,22 @@ export function getEnvCredentials(): { type: 'token' | 'api_key'; value: string 
 // Token Verification
 // ---------------------------------------------------------------------------
 
+/**
+ * Claude Code identity prefix required by the API for OAuth token auth.
+ */
+const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/**
+ * Required betas for OAuth token requests.
+ */
+const OAUTH_BETAS: string[] = ['claude-code-20250219', 'oauth-2025-04-20'];
+
 export async function verifyCredentials(
   value: string,
   type: 'token' | 'api_key'
 ): Promise<{ valid: boolean; error?: string }> {
   try {
-    // For OAuth tokens, must mimic Claude Code's headers exactly
-    // See: https://github.com/anthropics/pi-ai anthropic.js
-    const claudeCodeVersion = '2.1.2';
+    const claudeCodeVersion = '2.1.37';
     const clientOptions = type === 'token'
       ? {
           apiKey: null as unknown as undefined,
@@ -121,7 +129,6 @@ export async function verifyCredentials(
           defaultHeaders: {
             'accept': 'application/json',
             'anthropic-dangerous-direct-browser-access': 'true',
-            'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
             'user-agent': `claude-cli/${claudeCodeVersion} (external, cli)`,
             'x-app': 'cli',
           }
@@ -129,11 +136,22 @@ export async function verifyCredentials(
       : { apiKey: value };
 
     const client = new Anthropic(clientOptions);
-    await client.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1,
-      messages: [{ role: 'user', content: 'hi' }],
-    });
+
+    if (type === 'token') {
+      await client.beta.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1,
+        system: [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX }],
+        messages: [{ role: 'user', content: 'hi' }],
+        betas: [...OAUTH_BETAS],
+      } as any);
+    } else {
+      await client.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+    }
 
     return { valid: true };
   } catch (err) {
@@ -212,7 +230,63 @@ export function readClaudeCliCredentials(): ClaudeOAuthCredentials | null {
 export interface ResolvedCredentials {
   type: 'token' | 'api_key';
   value: string;
-  source?: 'env' | 'stored' | 'claude-keychain';
+  source?: 'env' | 'stored' | 'settings' | 'claude-keychain' | 'openclaw-token';
+}
+
+/**
+ * Read anthropicApiKey from ~/.daemux/settings.json.
+ * This is useful for service/daemon mode where environment variables
+ * are not easily available and Claude Code keychain tokens are restricted.
+ */
+function readSettingsApiKey(): string | undefined {
+  const settingsPath = join(homedir(), '.daemux', 'settings.json');
+  if (!existsSync(settingsPath)) return undefined;
+
+  try {
+    const data = JSON.parse(readFileSync(settingsPath, 'utf-8')) as Record<string, unknown>;
+    const key = data.anthropicApiKey;
+    return typeof key === 'string' && key.length > 0 ? key : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Read a Claude Code setup-token from openclaw's auth profiles.
+ * Setup tokens (sk-ant-oat01-...) are API keys created via `claude setup-token`
+ * that work as standard X-Api-Key credentials, unlike the raw OAuth keychain
+ * tokens which are restricted to Claude Code only.
+ */
+function readOpenclawSetupToken(): string | undefined {
+  const authPath = join(homedir(), '.openclaw', 'agents', 'main', 'agent', 'auth-profiles.json');
+  if (!existsSync(authPath)) return undefined;
+
+  try {
+    const data = JSON.parse(readFileSync(authPath, 'utf-8')) as {
+      profiles?: Record<string, {
+        type?: string;
+        provider?: string;
+        token?: string;
+      }>;
+    };
+    const profiles = data?.profiles ?? {};
+
+    for (const profile of Object.values(profiles)) {
+      if (
+        profile.type === 'token' &&
+        profile.provider === 'anthropic' &&
+        typeof profile.token === 'string' &&
+        profile.token.startsWith(TOKEN_PREFIX) &&
+        profile.token.length >= TOKEN_MIN_LENGTH
+      ) {
+        return profile.token;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 export function resolveCredentials(): ResolvedCredentials | undefined {
@@ -231,7 +305,24 @@ export function resolveCredentials(): ResolvedCredentials | undefined {
     if (value) return { type: creds.type, value, source: 'stored' };
   }
 
-  // Priority 3: Claude Code keychain (macOS)
+  // Priority 3: Settings file anthropicApiKey (useful for service/daemon mode)
+  const settingsKey = readSettingsApiKey();
+  if (settingsKey) {
+    return { type: 'api_key', value: settingsKey, source: 'settings' };
+  }
+
+  // Priority 4: Openclaw setup token (shared Claude Code setup-token).
+  // These are OAuth setup tokens (sk-ant-oat01-...) that must be used as
+  // Bearer tokens via the beta.messages API with Claude Code betas.
+  const openclawToken = readOpenclawSetupToken();
+  if (openclawToken) {
+    return { type: 'token', value: openclawToken, source: 'openclaw-token' };
+  }
+
+  // Priority 5: Claude Code keychain (macOS) - NOTE: These OAuth tokens are
+  // restricted to Claude Code itself and will fail with "This credential is
+  // only authorized for use with Claude Code". Kept as last resort but will
+  // typically not work for third-party applications.
   const claudeCreds = readClaudeCliCredentials();
   if (claudeCreds && claudeCreds.expiresAt > Date.now()) {
     return { type: 'token', value: claudeCreds.accessToken, source: 'claude-keychain' };

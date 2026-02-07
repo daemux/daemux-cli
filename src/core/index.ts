@@ -179,3 +179,48 @@ export {
   type ToolCallRecord,
   type SessionContext,
 } from './loop';
+
+// Enhanced Channel Types
+export {
+  ChannelMessageTypeSchema,
+  ChannelAttachmentSchema,
+  RichChannelMessageSchema,
+  ChannelSendOptionsSchema,
+  type ChannelMessageType,
+  type ChannelAttachment,
+  type RichChannelMessage,
+  type ChannelSendOptions,
+  type ChannelEventType,
+  type ChannelEventHandler,
+  type EnhancedChannel,
+} from './channel-types';
+
+// Channel Formatting
+export {
+  plainTextFormatter,
+  type ChannelFormatter,
+} from './channel-format';
+
+// Channel Manager
+export {
+  ChannelManager,
+  createChannelManager,
+  getChannelManager,
+} from './channel-manager';
+
+// Transcription
+export {
+  OpenAITranscriptionProvider,
+  createTranscriptionProvider,
+  type TranscriptionOptions,
+  type TranscriptionResult,
+  type TranscriptionProvider,
+} from './transcription';
+
+// Channel Router
+export {
+  ChannelRouter,
+  createChannelRouter,
+  getChannelRouter,
+  type ChannelRouterOptions,
+} from './channel-router';

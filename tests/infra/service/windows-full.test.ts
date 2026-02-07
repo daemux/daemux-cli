@@ -200,7 +200,7 @@ describe('WindowsServiceManager Full Coverage', () => {
         description: 'Full Description',
         execPath: 'C:\\test.exe',
         args: ['--flag', 'value'],
-        workingDir: 'C:\\workdir',
+        workingDirectory: 'C:\\workdir',
         env: { KEY: 'value' },
       };
 

@@ -21,7 +21,7 @@ describe('SystemdServiceManager', () => {
     description: 'A test service for unit tests',
     execPath: '/usr/local/bin/test-service',
     args: ['--config', '/etc/test.conf'],
-    workingDir: '/tmp',
+    workingDirectory: '/tmp',
     env: {
       TEST_VAR: 'test_value',
       NODE_ENV: 'production',

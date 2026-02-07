@@ -16,7 +16,7 @@ describe('WindowsServiceManager', () => {
     description: 'A test service for unit tests',
     execPath: 'C:\\Program Files\\Test\\test-service.exe',
     args: ['--config', 'C:\\test\\config.json'],
-    workingDir: 'C:\\temp',
+    workingDirectory: 'C:\\temp',
     env: {
       TEST_VAR: 'test_value',
       NODE_ENV: 'production',
