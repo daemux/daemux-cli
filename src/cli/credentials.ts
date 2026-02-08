@@ -116,20 +116,22 @@ const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI
  */
 const OAUTH_BETAS: string[] = ['claude-code-20250219', 'oauth-2025-04-20'];
 
+const CLAUDE_CODE_VERSION = '2.1.37';
+
 export async function verifyCredentials(
   value: string,
   type: 'token' | 'api_key'
 ): Promise<{ valid: boolean; error?: string }> {
   try {
-    const claudeCodeVersion = '2.1.37';
     const clientOptions = type === 'token'
       ? {
           apiKey: null as unknown as undefined,
           authToken: value,
           defaultHeaders: {
             'accept': 'application/json',
+            'anthropic-beta': OAUTH_BETAS.join(','),
             'anthropic-dangerous-direct-browser-access': 'true',
-            'user-agent': `claude-cli/${claudeCodeVersion} (external, cli)`,
+            'user-agent': `claude-cli/${CLAUDE_CODE_VERSION} (external, cli)`,
             'x-app': 'cli',
           }
         }
@@ -138,12 +140,11 @@ export async function verifyCredentials(
     const client = new Anthropic(clientOptions);
 
     if (type === 'token') {
-      await client.beta.messages.create({
+      await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1,
         system: [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX }],
         messages: [{ role: 'user', content: 'hi' }],
-        betas: [...OAUTH_BETAS],
       } as any);
     } else {
       await client.messages.create({
@@ -158,18 +159,25 @@ export async function verifyCredentials(
     const errorMessage = err instanceof Error ? err.message : String(err);
     const lowerMessage = errorMessage.toLowerCase();
 
-    const authErrors = ['authentication_error', 'invalid x-api-key', 'invalid api key', 'invalid_api_key', 'api key not valid'];
+    const authErrors = [
+      'authentication_error', 'invalid x-api-key', 'invalid api key', 'invalid_api_key', 'api key not valid',
+    ];
     const has401 = lowerMessage.includes('401') && lowerMessage.includes('unauthorized');
-    if (authErrors.some(err => lowerMessage.includes(err)) || has401) {
+    if (authErrors.some(pattern => lowerMessage.includes(pattern)) || has401) {
       return { valid: false, error: 'Invalid credentials. Please check your token or API key.' };
     }
 
-    if (['permission_error', 'permission denied', '403'].some(err => lowerMessage.includes(err))) {
+    const permissionErrors = ['permission_error', 'permission denied', '403'];
+    if (permissionErrors.some(pattern => lowerMessage.includes(pattern))) {
       return { valid: false, error: 'Credentials valid but access denied. Check your account permissions.' };
     }
 
-    const nonAuthErrors = ['rate_limit', 'overloaded', 'billing', 'quota', 'credit', 'model not found', 'not_found_error', 'invalid_request', 'bad_request', 'timeout', 'connection', 'network'];
-    if (nonAuthErrors.some(err => lowerMessage.includes(err))) {
+    const nonAuthErrors = [
+      'rate_limit', 'overloaded', 'billing', 'quota', 'credit',
+      'model not found', 'not_found_error', 'invalid_request', 'bad_request',
+      'timeout', 'connection', 'network',
+    ];
+    if (nonAuthErrors.some(pattern => lowerMessage.includes(pattern))) {
       return { valid: true };
     }
 
@@ -306,14 +314,16 @@ export function resolveCredentials(): ResolvedCredentials | undefined {
   }
 
   // Priority 3: Settings file anthropicApiKey (useful for service/daemon mode)
+  // Auto-detect OAuth tokens (sk-ant-oat01-) vs standard API keys (sk-ant-api)
   const settingsKey = readSettingsApiKey();
   if (settingsKey) {
-    return { type: 'api_key', value: settingsKey, source: 'settings' };
+    const credType = settingsKey.startsWith(TOKEN_PREFIX) ? 'token' : 'api_key';
+    return { type: credType, value: settingsKey, source: 'settings' };
   }
 
   // Priority 4: Openclaw setup token (shared Claude Code setup-token).
   // These are OAuth setup tokens (sk-ant-oat01-...) that must be used as
-  // Bearer tokens via the beta.messages API with Claude Code betas.
+  // Bearer tokens with Claude Code betas set via default headers.
   const openclawToken = readOpenclawSetupToken();
   if (openclawToken) {
     return { type: 'token', value: openclawToken, source: 'openclaw-token' };

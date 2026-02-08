@@ -49,11 +49,18 @@ function validateCredential(
   const label = type === 'token' ? 'Token' : 'API key';
   if (!value) return { valid: false, error: `${label} cannot be empty` };
 
-  const prefix = type === 'token' ? TOKEN_PREFIX : API_KEY_PREFIX;
-  if (!value.startsWith(prefix)) return { valid: false, error: `Must start with "${prefix}"` };
-
-  if (type === 'token' && value.length < TOKEN_MIN_LENGTH) {
-    return { valid: false, error: `Token must be at least ${TOKEN_MIN_LENGTH} characters` };
+  if (type === 'token') {
+    if (!value.startsWith(TOKEN_PREFIX)) {
+      return { valid: false, error: `Must start with "${TOKEN_PREFIX}"` };
+    }
+    if (value.length < TOKEN_MIN_LENGTH) {
+      return { valid: false, error: `Token must be at least ${TOKEN_MIN_LENGTH} characters` };
+    }
+  } else {
+    // Accept both standard API keys (sk-ant-api) and OAuth tokens (sk-ant-oat01-)
+    if (!value.startsWith(API_KEY_PREFIX) && !value.startsWith(TOKEN_PREFIX)) {
+      return { valid: false, error: `Must start with "${API_KEY_PREFIX}" or "${TOKEN_PREFIX}"` };
+    }
   }
 
   return { valid: true };
@@ -78,7 +85,6 @@ async function setupCredential(
 
   const isToken = type === 'token';
   const label = isToken ? 'Token' : 'API Key';
-  const prefix = isToken ? TOKEN_PREFIX : API_KEY_PREFIX;
 
   console.log(bold(`\nSetup ${label}\n`));
 
@@ -92,8 +98,8 @@ async function setupCredential(
     console.log(dim('  2. Copy the token that starts with "sk-ant-oat01-"'));
     console.log(dim('  3. Paste it below\n'));
   } else {
-    console.log(dim(`Paste your ${label.toLowerCase()} from Anthropic Console.`));
-    console.log(dim(`The ${label.toLowerCase()} should start with "${prefix}".\n`));
+    console.log(dim(`Paste your ${label.toLowerCase()} or OAuth token.`));
+    console.log(dim(`Accepted formats: "${API_KEY_PREFIX}..." or "${TOKEN_PREFIX}..."\n`));
   }
 
   const value = await promptSecret(`${label}:`);
@@ -104,10 +110,19 @@ async function setupCredential(
     process.exit(1);
   }
 
+  // Auto-detect: OAuth tokens (sk-ant-oat01-) entered via the api-key command
+  // must be stored and verified as tokens
+  const detectedAsToken = value.startsWith(TOKEN_PREFIX);
+  const resolvedType: 'token' | 'api_key' = detectedAsToken ? 'token' : type;
+
+  if (type === 'api_key' && detectedAsToken) {
+    printInfo('Detected OAuth token format, storing as token credential.');
+  }
+
   const verifySpinner = createSpinner('Verifying credentials with Anthropic API');
   verifySpinner.start();
 
-  const verification = await verifyCredentials(value, type);
+  const verification = await verifyCredentials(value, resolvedType);
   if (!verification.valid) {
     verifySpinner.fail('Credentials verification failed');
     printError(verification.error!);
@@ -120,10 +135,10 @@ async function setupCredential(
 
   try {
     const credentials: Credentials = {
-      type,
+      type: resolvedType,
       provider: options.provider,
-      token: isToken ? value : undefined,
-      apiKey: isToken ? undefined : value,
+      token: resolvedType === 'token' ? value : undefined,
+      apiKey: resolvedType === 'api_key' ? value : undefined,
       expires: null,
       createdAt: Date.now(),
     };

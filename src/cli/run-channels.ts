@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
+import { resolveCredentials } from './credentials';
 import { createChannelManager } from '../core/channel-manager';
 import { createChannelRouter, type ChannelRouter } from '../core/channel-router';
 import { createTranscriptionProvider } from '../core/transcription';
@@ -144,26 +145,12 @@ export async function initializeChannels(
 // ---------------------------------------------------------------------------
 
 function warnIfClaudeCodeCredentials(logger: Logger): void {
-  const settingsPath = join(homedir(), '.daemux', 'settings.json');
-  if (!existsSync(settingsPath)) return;
-
-  try {
-    const data = JSON.parse(readFileSync(settingsPath, 'utf-8')) as Record<string, unknown>;
-    if (data.anthropicApiKey) return; // Has explicit API key, no warning needed
-  } catch {
-    return;
+  const creds = resolveCredentials();
+  if (!creds || creds.source === 'claude-keychain') {
+    logger.warn(
+      'No Anthropic API key found in settings.json, environment, or credentials store. ' +
+      'Claude Code keychain tokens cannot be used for API access. ' +
+      'Add "anthropicApiKey": "sk-ant-api..." or "sk-ant-oat01-..." to ~/.daemux/settings.json',
+    );
   }
-
-  // Check if env vars provide credentials
-  if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_OAUTH_TOKEN) return;
-
-  // Check for stored credentials
-  const credsPath = join(homedir(), '.daemux', 'credentials', 'anthropic.json');
-  if (existsSync(credsPath)) return;
-
-  logger.warn(
-    'No Anthropic API key found in settings.json, environment, or credentials store. ' +
-    'Claude Code keychain tokens cannot be used for API access. ' +
-    'Add "anthropicApiKey": "sk-ant-api..." to ~/.daemux/settings.json',
-  );
 }
