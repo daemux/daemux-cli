@@ -27,11 +27,12 @@ describe('Configuration', () => {
 
     // Clean up environment variables
     delete process.env.AGENT_MODEL;
-    delete process.env.AGENT_MAX_TOKENS;
     delete process.env.AGENT_DEBUG;
     delete process.env.AGENT_QUEUE_MODE;
     delete process.env.AGENT_ID;
     delete process.env.AGENT_DATA_DIR;
+    delete process.env.AGENT_CONTEXT_WINDOW;
+    delete process.env.AGENT_HEARTBEAT_ENABLED;
   });
 
   describe('ConfigSchema', () => {
@@ -40,7 +41,6 @@ describe('Configuration', () => {
         agentId: 'test-agent',
         dataDir: '/tmp/agent',
         model: 'claude-sonnet-4-20250514',
-        maxTokens: 8192,
         compactionThreshold: 0.8,
         effectiveContextWindow: 180000,
         queueMode: 'steer',
@@ -68,7 +68,6 @@ describe('Configuration', () => {
       if (result.success) {
         // Model now defaults to 'default' to let provider choose
         expect(result.data.model).toBe('default');
-        expect(result.data.maxTokens).toBe(8192);
         expect(result.data.queueMode).toBe('steer');
       }
     });
@@ -121,7 +120,6 @@ describe('Configuration', () => {
       const config = loader.load();
 
       expect(config.model).toBe('claude-sonnet-4-20250514');
-      expect(config.maxTokens).toBe(8192);
       expect(config.queueMode).toBe('steer');
       expect(config.agentId).toBeDefined();
     });
@@ -130,7 +128,6 @@ describe('Configuration', () => {
       const settingsPath = join(testAgentDir, 'settings.json');
       writeFileSync(settingsPath, JSON.stringify({
         model: 'claude-opus-4-20250514',
-        maxTokens: 16384,
         debug: true,
       }));
 
@@ -143,7 +140,6 @@ describe('Configuration', () => {
       const config = loader.load();
 
       expect(config.model).toBe('claude-opus-4-20250514');
-      expect(config.maxTokens).toBe(16384);
       expect(config.debug).toBe(true);
     });
 
@@ -176,7 +172,6 @@ describe('Configuration', () => {
 
     it('should override with environment variables', () => {
       process.env.AGENT_MODEL = 'claude-haiku-3-5-20250514';
-      process.env.AGENT_MAX_TOKENS = '4096';
       process.env.AGENT_DEBUG = 'true';
 
       const loader = new ConfigLoader({
@@ -187,7 +182,6 @@ describe('Configuration', () => {
       const config = loader.load();
 
       expect(config.model).toBe('claude-haiku-3-5-20250514');
-      expect(config.maxTokens).toBe(4096);
       expect(config.debug).toBe(true);
     });
 
@@ -196,7 +190,7 @@ describe('Configuration', () => {
       const settingsPath = join(testAgentDir, 'settings.json');
       writeFileSync(settingsPath, JSON.stringify({
         model: 'claude-opus-4-20250514',
-        maxTokens: 16384,
+        debug: true,
       }));
 
       // Environment override
@@ -212,7 +206,7 @@ describe('Configuration', () => {
       // Env should win
       expect(config.model).toBe('claude-haiku-3-5-20250514');
       // Project setting should remain
-      expect(config.maxTokens).toBe(16384);
+      expect(config.debug).toBe(true);
     });
 
     it('should handle invalid settings file gracefully', () => {
@@ -325,11 +319,9 @@ describe('Configuration', () => {
 
       const updated = setConfig({
         debug: true,
-        maxTokens: 4096,
       });
 
       expect(updated.debug).toBe(true);
-      expect(updated.maxTokens).toBe(4096);
     });
 
     it('should reject invalid config updates', () => {
@@ -339,10 +331,10 @@ describe('Configuration', () => {
         skipUser: true,
       });
 
-      // Model now accepts any string, so test with invalid numeric value
+      // Test with invalid compaction threshold
       expect(() => {
         setConfig({
-          maxTokens: -1, // Invalid: must be positive
+          compactionThreshold: 1.5, // Invalid: must be between 0.5 and 0.95
         });
       }).toThrow();
     });
@@ -365,7 +357,7 @@ describe('Configuration', () => {
     });
 
     it('should parse numeric env vars correctly', () => {
-      process.env.AGENT_MAX_TOKENS = '4096';
+      process.env.AGENT_CONTEXT_WINDOW = '200000';
 
       const loader = new ConfigLoader({
         projectDir: testDir,
@@ -374,11 +366,11 @@ describe('Configuration', () => {
 
       const config = loader.load();
 
-      expect(config.maxTokens).toBe(4096);
+      expect(config.effectiveContextWindow).toBe(200000);
     });
 
     it('should ignore invalid numeric env vars', () => {
-      process.env.AGENT_MAX_TOKENS = 'not-a-number';
+      process.env.AGENT_CONTEXT_WINDOW = 'not-a-number';
 
       const loader = new ConfigLoader({
         projectDir: testDir,
@@ -388,7 +380,7 @@ describe('Configuration', () => {
       const config = loader.load();
 
       // Should use default
-      expect(config.maxTokens).toBe(8192);
+      expect(config.effectiveContextWindow).toBe(180000);
     });
   });
 });

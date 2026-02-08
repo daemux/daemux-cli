@@ -3,11 +3,16 @@
  */
 
 import { spawn } from 'child_process';
-import { getLogger } from '../logger';
+import type { Logger } from './logger';
+import { getNoopLogger } from './logger';
 import type { PlatformServiceManager, ServiceConfig, ServiceInfo, ServiceStatus } from './types';
 
 export class WindowsServiceManager implements PlatformServiceManager {
-  private logger = getLogger().child('windows-service');
+  private logger: Logger;
+
+  constructor(logger?: Logger) {
+    this.logger = (logger ?? getNoopLogger()).child('windows-service');
+  }
 
   async install(config: ServiceConfig): Promise<void> {
     await this.runNssm(['install', config.name, config.execPath]);

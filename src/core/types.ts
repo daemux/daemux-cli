@@ -22,7 +22,6 @@ export const ConfigSchema = z.object({
    * Common Anthropic models: claude-sonnet-4-20250514, claude-opus-4-20250514, claude-haiku-3-5-20250514
    */
   model: z.string().default('default'),
-  maxTokens: z.number().positive().default(8192),
   compactionThreshold: z.number().min(0.5).max(0.95).default(0.8),
   effectiveContextWindow: z.number().positive().default(180000),
   queueMode: z.enum(['steer', 'interrupt', 'queue', 'collect']).default('steer'),

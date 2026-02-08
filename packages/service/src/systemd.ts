@@ -7,12 +7,17 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawn } from 'child_process';
-import { getLogger } from '../logger';
+import type { Logger } from './logger';
+import { getNoopLogger } from './logger';
 import type { PlatformServiceManager, ServiceConfig, ServiceInfo, ServiceStatus } from './types';
 
 export class SystemdServiceManager implements PlatformServiceManager {
-  private logger = getLogger().child('systemd');
+  private logger: Logger;
   private userDir = join(homedir(), '.config', 'systemd', 'user');
+
+  constructor(logger?: Logger) {
+    this.logger = (logger ?? getNoopLogger()).child('systemd');
+  }
 
   private getUnitPath(name: string): string {
     return join(this.userDir, `${name}.service`);

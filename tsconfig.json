@@ -19,6 +19,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
+    "baseUrl": ".",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true

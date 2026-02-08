@@ -16,7 +16,6 @@ import { ConfigSchema, type Config } from './types';
 
 const SettingsFileSchema = z.object({
   model: z.string().optional(),
-  maxTokens: z.number().positive().optional(),
   compactionThreshold: z.number().min(0.5).max(0.95).optional(),
   effectiveContextWindow: z.number().positive().optional(),
   queueMode: z.enum(['steer', 'interrupt', 'queue', 'collect']).optional(),
@@ -53,7 +52,6 @@ export interface ConfigLoaderOptions {
 
 const DEFAULT_CONFIG: Omit<Config, 'agentId' | 'dataDir'> = {
   model: 'claude-sonnet-4-20250514',
-  maxTokens: 8192,
   compactionThreshold: 0.8,
   effectiveContextWindow: 180000,
   queueMode: 'steer',
@@ -80,6 +78,8 @@ function loadJsonFile<T>(path: string, schema: z.ZodSchema<T>): T | null {
   try {
     const content = readFileSync(path, 'utf-8');
     const data = JSON.parse(content);
+    // Clean up deprecated fields from old settings files
+    delete data.maxTokens;
     const result = schema.safeParse(data);
     if (result.success) {
       return result.data;
@@ -108,7 +108,6 @@ interface EnvMapping {
 
 const ENV_MAPPINGS: EnvMapping[] = [
   { envKey: 'AGENT_MODEL', configKey: 'model', transform: (v) => v },
-  { envKey: 'AGENT_MAX_TOKENS', configKey: 'maxTokens', transform: (v) => parseInt(v, 10) },
   { envKey: 'AGENT_COMPACTION_THRESHOLD', configKey: 'compactionThreshold', transform: (v) => parseFloat(v) },
   { envKey: 'AGENT_CONTEXT_WINDOW', configKey: 'effectiveContextWindow', transform: (v) => parseInt(v, 10) },
   { envKey: 'AGENT_QUEUE_MODE', configKey: 'queueMode', transform: (v) => v },
@@ -259,7 +258,7 @@ export class ConfigLoader {
 
   private mapSettingsToConfig(settings: SettingsFile): Partial<Config> {
     const SETTINGS_KEYS: Array<keyof SettingsFile> = [
-      'model', 'maxTokens', 'compactionThreshold', 'effectiveContextWindow',
+      'model', 'compactionThreshold', 'effectiveContextWindow',
       'queueMode', 'collectWindowMs', 'hookTimeoutMs', 'turnTimeoutMs',
       'debug', 'mcpDebug', 'heartbeatIntervalMs', 'heartbeatEnabled',
       'maxConcurrentTasks', 'workPollingIntervalMs', 'workMaxIterationsPerTask',

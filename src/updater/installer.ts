@@ -7,6 +7,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { mkdir, readdir, rm, symlink, rename, lstat, readlink } from 'fs/promises';
 import { getLogger } from '../infra/logger';
+import { isVersionLocked } from './pid-lock';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -82,7 +83,8 @@ export async function activateVersion(version: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function cleanupOldVersions(
-  keepCount?: number
+  keepCount?: number,
+  options?: { force?: boolean }
 ): Promise<void> {
   const log = getLogger().child('updater:installer');
   const keep = keepCount ?? DEFAULT_KEEP_COUNT;
@@ -107,6 +109,14 @@ export async function cleanupOldVersions(
 
   for (const version of toRemove) {
     if (version === activeVersion) continue;
+
+    if (!options?.force) {
+      const lockStatus = await isVersionLocked(version);
+      if (lockStatus.locked) {
+        log.info('Skipping locked version (in use)', { version, pids: lockStatus.pids });
+        continue;
+      }
+    }
 
     const versionDir = join(VERSIONS_DIR, version);
     try {

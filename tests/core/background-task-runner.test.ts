@@ -24,7 +24,6 @@ const testConfig: Config = {
   agentId: 'test-agent',
   dataDir: testDir,
   model: 'mock-model',
-  maxTokens: 8192,
   compactionThreshold: 0.8,
   effectiveContextWindow: 180000,
   queueMode: 'steer',

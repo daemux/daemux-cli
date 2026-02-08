@@ -142,7 +142,6 @@ Configuration priority (highest to lowest):
 ```json
 {
   "model": "claude-sonnet-4-20250514",
-  "maxTokens": 8192,
   "compactionThreshold": 0.8,
   "effectiveContextWindow": 180000,
   "queueMode": "steer",

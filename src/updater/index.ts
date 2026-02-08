@@ -36,6 +36,8 @@ export {
 } from './installer';
 export { isNewerVersion, isUpdateState } from './utils';
 export { loadStateSync, persistState, defaultState } from './state';
+export { acquireLock, releaseLock, isVersionLocked, cleanStaleLocks } from './pid-lock';
+export type { LockStatus } from './pid-lock';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -190,7 +192,7 @@ export class Updater {
   // Apply Pending Update
   // -------------------------------------------------------------------------
 
-  async apply(): Promise<boolean> {
+  async apply(options?: { force?: boolean }): Promise<boolean> {
     const log = getLogger().child('updater');
     const pending = this.state.pendingUpdate;
 
@@ -208,7 +210,7 @@ export class Updater {
 
     await installVersion(pending.path, pending.version);
     await activateVersion(pending.version);
-    await cleanupOldVersions();
+    await cleanupOldVersions(undefined, options);
 
     this.setState({
       currentVersion: pending.version,

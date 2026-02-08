@@ -67,7 +67,6 @@ if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" << 'EOF'
 {
   "model": "claude-sonnet-4-20250514",
-  "maxTokens": 8192,
   "debug": false
 }
 EOF

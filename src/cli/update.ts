@@ -120,7 +120,7 @@ function setAutoUpdate(enabled: boolean): void {
 // Check-and-Apply Action (default)
 // ---------------------------------------------------------------------------
 
-async function checkAndApply(): Promise<void> {
+async function checkAndApply(force = false): Promise<void> {
   const spinner = createSpinner('Checking for updates');
   spinner.start();
 
@@ -161,7 +161,7 @@ async function checkAndApply(): Promise<void> {
   const applySpinner = createSpinner('Applying update');
   applySpinner.start();
 
-  const applied = await updater.apply();
+  const applied = await updater.apply({ force });
   if (applied) {
     applySpinner.succeed(
       `Updated to v${result.availableVersion}. Please restart daemux.`
@@ -182,6 +182,7 @@ export function registerUpdateCommands(program: Command): void {
     .description('Check for updates and apply if available')
     .option('-c, --check', 'Check for updates without applying')
     .option('-s, --status', 'Show current update state')
+    .option('-f, --force', 'Force update (delete locked versions)')
     .option('--disable', 'Disable auto-updates')
     .option('--enable', 'Enable auto-updates')
     .action(handleUpdateCommand);
@@ -194,6 +195,7 @@ export function registerUpdateCommands(program: Command): void {
 interface UpdateCommandOptions {
   check?: boolean;
   status?: boolean;
+  force?: boolean;
   disable?: boolean;
   enable?: boolean;
 }
@@ -219,5 +221,5 @@ async function handleUpdateCommand(options: UpdateCommandOptions): Promise<void>
     return;
   }
 
-  await checkAndApply();
+  await checkAndApply(options.force);
 }

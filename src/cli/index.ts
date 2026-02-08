@@ -19,7 +19,8 @@ import { registerWorkCommands } from './work';
 import { setConfig, getConfig } from '../core/config';
 import { initLogger } from '../infra/logger';
 import { version as packageVersion } from '../../package.json';
-import { Updater, loadStateSync, defaultState } from '../updater';
+import { Updater, loadStateSync, defaultState, acquireLock, releaseLock } from '../updater';
+import { onShutdown } from './utils';
 
 // ---------------------------------------------------------------------------
 // Version Handling
@@ -169,6 +170,15 @@ async function main(): Promise<void> {
 
   // Run background update check before parsing commands
   checkForUpdatesInBackground();
+
+  // Acquire PID lock so cleanupOldVersions() won't delete our binary
+  try {
+    await acquireLock(packageVersion);
+    onShutdown(() => { releaseLock(); });
+    process.on('exit', () => { releaseLock(); });
+  } catch {
+    // Never block CLI startup for lock acquisition
+  }
 
   if (!hasCommand && !isHelpOrVersion) {
     // Manually parse and apply global options since preAction hook won't fire

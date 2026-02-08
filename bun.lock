@@ -6,6 +6,9 @@
       "name": "daemux",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.73.0",
+        "@daemux/mcp-client": "workspace:*",
+        "@daemux/service": "workspace:*",
+        "@daemux/updater": "workspace:*",
         "commander": "^14.0.0",
         "sqlite-vec": "^0.1.6",
         "zod": "^3.24.0",
@@ -16,11 +19,41 @@
         "typescript": "^5.9.0",
       },
     },
+    "packages/mcp-client": {
+      "name": "@daemux/mcp-client",
+      "version": "0.4.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "typescript": "^5.9.0",
+      },
+    },
+    "packages/service": {
+      "name": "@daemux/service",
+      "version": "0.4.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "typescript": "^5.9.0",
+      },
+    },
+    "packages/updater": {
+      "name": "@daemux/updater",
+      "version": "0.4.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "typescript": "^5.9.0",
+      },
+    },
   },
   "packages": {
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.73.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-URURVzhxXGJDGUGFunIOtBlSl7KWvZiAAKY/ttTkZAkXT9bTPqdk2eK0b8qqSxXpikh3QKPnPYpiyX98zf5ebw=="],
 
     "@babel/runtime": ["@babel/runtime@7.28.6", "", {}, "sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA=="],
+
+    "@daemux/mcp-client": ["@daemux/mcp-client@workspace:packages/mcp-client"],
+
+    "@daemux/service": ["@daemux/service@workspace:packages/service"],
+
+    "@daemux/updater": ["@daemux/updater@workspace:packages/updater"],
 
     "@oxlint/darwin-arm64": ["@oxlint/darwin-arm64@0.15.15", "", { "os": "darwin", "cpu": "arm64" }, "sha512-7GOyGM6D36lUhsOvavAVpF72SycPVG0Enunx0bzv8g0+9TklzOSFN3FJlZjLst14VPdZWujZMLgkQC7tOp+Rwg=="],
 

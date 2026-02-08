@@ -13,6 +13,7 @@ import type { EventBus } from '../event-bus';
 // Constants
 // ---------------------------------------------------------------------------
 
+const DEFAULT_MAX_TOKENS = 40000;
 const BACKOFF_DELAYS = [2000, 4000, 8000, 16000, 30000];
 const MAX_RETRIES = 5;
 
@@ -103,7 +104,7 @@ async function executeCall(
       content: m.content,
     })),
     tools,
-    maxTokens: config.maxTokens,
+    maxTokens: DEFAULT_MAX_TOKENS,
     systemPrompt,
   };
 

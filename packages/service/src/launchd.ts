@@ -7,12 +7,17 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawn } from 'child_process';
-import { getLogger } from '../logger';
+import type { Logger } from './logger';
+import { getNoopLogger } from './logger';
 import type { PlatformServiceManager, ServiceConfig, ServiceInfo, ServiceStatus } from './types';
 
 export class LaunchdServiceManager implements PlatformServiceManager {
-  private logger = getLogger().child('launchd');
+  private logger: Logger;
   private agentsDir = join(homedir(), 'Library', 'LaunchAgents');
+
+  constructor(logger?: Logger) {
+    this.logger = (logger ?? getNoopLogger()).child('launchd');
+  }
 
   private getPlistPath(name: string): string {
     return join(this.agentsDir, `${name}.plist`);

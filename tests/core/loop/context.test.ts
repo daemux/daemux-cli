@@ -24,7 +24,6 @@ describe('ContextBuilder', () => {
     agentId: 'test-agent',
     dataDir: '/tmp/test',
     model: 'mock-model',
-    maxTokens: 8192,
     compactionThreshold: 0.8,
     effectiveContextWindow: 180000,
     queueMode: 'steer',
