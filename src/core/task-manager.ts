@@ -19,6 +19,8 @@ export interface TaskCreateInput {
   owner?: string;
   metadata?: Record<string, unknown>;
   blockedBy?: string[];
+  timeBudgetMs?: number;
+  verifyCommand?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,11 +33,14 @@ export interface TaskUpdateInput {
   description?: string;
   activeForm?: string;
   owner?: string;
+  clearOwner?: boolean;
   addBlocks?: string[];
   addBlockedBy?: string[];
   removeBlocks?: string[];
   removeBlockedBy?: string[];
   metadata?: Record<string, unknown>;
+  failureContext?: string;
+  retryCount?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +69,9 @@ export class TaskManager {
       blockedBy: input.blockedBy ?? [],
       blocks: [],
       metadata: input.metadata ?? {},
+      timeBudgetMs: input.timeBudgetMs,
+      verifyCommand: input.verifyCommand,
+      retryCount: 0,
     });
 
     // Update reverse dependencies (blocks)
@@ -100,129 +108,18 @@ export class TaskManager {
     const changes: string[] = [];
     const updates: Partial<Task> = {};
 
-    // Basic field updates
-    if (input.status !== undefined && input.status !== existing.status) {
-      updates.status = input.status;
-      changes.push('status');
-    }
-    if (input.subject !== undefined) {
-      updates.subject = input.subject;
-      changes.push('subject');
-    }
-    if (input.description !== undefined) {
-      updates.description = input.description;
-      changes.push('description');
-    }
-    if (input.activeForm !== undefined) {
-      updates.activeForm = input.activeForm;
-      changes.push('activeForm');
-    }
-    if (input.owner !== undefined) {
-      updates.owner = input.owner;
-      changes.push('owner');
-    }
-    if (input.metadata !== undefined) {
-      updates.metadata = { ...existing.metadata, ...input.metadata };
-      changes.push('metadata');
-    }
+    this.applyFieldUpdates(input, existing, id, updates, changes);
+    this.applyDependencyChanges(input, existing, id, updates, changes);
 
-    // Handle dependency additions
-    if (input.addBlockedBy && input.addBlockedBy.length > 0) {
-      const newBlockedBy = [...new Set([...existing.blockedBy, ...input.addBlockedBy])];
-      updates.blockedBy = newBlockedBy;
-      changes.push('blockedBy');
-
-      // Update reverse dependencies
-      for (const blockerId of input.addBlockedBy) {
-        if (!existing.blockedBy.includes(blockerId)) {
-          const blocker = this.db.tasks.get(blockerId);
-          if (blocker && !blocker.blocks.includes(id)) {
-            this.db.tasks.update(blockerId, {
-              blocks: [...blocker.blocks, id],
-            });
-          }
-        }
-      }
-    }
-
-    if (input.addBlocks && input.addBlocks.length > 0) {
-      const newBlocks = [...new Set([...existing.blocks, ...input.addBlocks])];
-      updates.blocks = newBlocks;
-      changes.push('blocks');
-
-      // Update reverse dependencies
-      for (const blockedId of input.addBlocks) {
-        if (!existing.blocks.includes(blockedId)) {
-          const blocked = this.db.tasks.get(blockedId);
-          if (blocked && !blocked.blockedBy.includes(id)) {
-            this.db.tasks.update(blockedId, {
-              blockedBy: [...blocked.blockedBy, id],
-            });
-          }
-        }
-      }
-    }
-
-    // Handle dependency removals
-    if (input.removeBlockedBy && input.removeBlockedBy.length > 0) {
-      const newBlockedBy = existing.blockedBy.filter(
-        b => !input.removeBlockedBy!.includes(b)
-      );
-      updates.blockedBy = newBlockedBy;
-      changes.push('blockedBy');
-
-      // Update reverse dependencies
-      for (const blockerId of input.removeBlockedBy) {
-        const blocker = this.db.tasks.get(blockerId);
-        if (blocker) {
-          this.db.tasks.update(blockerId, {
-            blocks: blocker.blocks.filter(b => b !== id),
-          });
-        }
-      }
-    }
-
-    if (input.removeBlocks && input.removeBlocks.length > 0) {
-      const newBlocks = existing.blocks.filter(
-        b => !input.removeBlocks!.includes(b)
-      );
-      updates.blocks = newBlocks;
-      changes.push('blocks');
-
-      // Update reverse dependencies
-      for (const blockedId of input.removeBlocks) {
-        const blocked = this.db.tasks.get(blockedId);
-        if (blocked) {
-          this.db.tasks.update(blockedId, {
-            blockedBy: blocked.blockedBy.filter(b => b !== id),
-          });
-        }
-      }
-    }
-
-    // Apply updates
     const task = this.db.tasks.update(id, updates);
 
     if (changes.length > 0) {
       await this.eventBus.emit('task:updated', { task, changes });
     }
 
-    // Emit completion event
-    if (input.status === 'completed' && existing.status !== 'completed') {
-      await this.eventBus.emit('task:completed', { task });
-      await this.checkUnblockedTasks(id);
-    }
-
-    // Emit blocked event if newly blocked
-    if (task.blockedBy.length > 0 && existing.blockedBy.length === 0) {
-      await this.eventBus.emit('task:blocked', {
-        task,
-        blockedBy: task.blockedBy,
-      });
-    }
+    await this.emitLifecycleEvents(input, existing, task, id);
 
     getLogger().debug(`Task updated: ${task.subject}`, { id, changes });
-
     return task;
   }
 
@@ -251,24 +148,8 @@ export class TaskManager {
     const task = this.db.tasks.get(id);
     if (!task) return false;
 
-    // Remove from other tasks' dependencies
-    for (const blockerId of task.blockedBy) {
-      const blocker = this.db.tasks.get(blockerId);
-      if (blocker) {
-        this.db.tasks.update(blockerId, {
-          blocks: blocker.blocks.filter(b => b !== id),
-        });
-      }
-    }
-
-    for (const blockedId of task.blocks) {
-      const blocked = this.db.tasks.get(blockedId);
-      if (blocked) {
-        this.db.tasks.update(blockedId, {
-          blockedBy: blocked.blockedBy.filter(b => b !== id),
-        });
-      }
-    }
+    this.removeReverseDeps(id, task.blockedBy, 'blocks');
+    this.removeReverseDeps(id, task.blocks, 'blockedBy');
 
     return this.db.tasks.delete(id);
   }
@@ -337,6 +218,135 @@ export class TaskManager {
   }
 
   /**
+   * Mark a task as failed with error context
+   */
+  async fail(id: string, errorMessage: string): Promise<Task> {
+    const existing = this.get(id);
+    if (!existing) throw new Error(`Task ${id} not found`);
+    return this.update(id, {
+      status: 'failed',
+      failureContext: errorMessage.slice(0, 2000),
+      retryCount: (existing.retryCount ?? 0) + 1,
+    });
+  }
+
+  /**
+   * Retry a failed task by resetting to pending
+   */
+  async retry(id: string): Promise<Task> {
+    const existing = this.get(id);
+    if (!existing) throw new Error(`Task ${id} not found`);
+    if (existing.status !== 'failed') {
+      throw new Error(`Task ${id} is not in failed status`);
+    }
+    return this.update(id, { status: 'pending', clearOwner: true });
+  }
+
+  // -------------------------------------------------------------------------
+  // Private: Field and dependency update helpers
+  // -------------------------------------------------------------------------
+
+  private applyFieldUpdates(
+    input: TaskUpdateInput, existing: Task, id: string,
+    updates: Partial<Task>, changes: string[],
+  ): void {
+    if (input.status !== undefined && input.status !== existing.status) {
+      updates.status = input.status;
+      changes.push('status');
+    }
+    if (input.subject !== undefined) { updates.subject = input.subject; changes.push('subject'); }
+    if (input.description !== undefined) { updates.description = input.description; changes.push('description'); }
+    if (input.activeForm !== undefined) { updates.activeForm = input.activeForm; changes.push('activeForm'); }
+
+    if (input.clearOwner) {
+      this.db.tasks.clearOwner(id);
+      changes.push('owner');
+    } else if (input.owner !== undefined) {
+      updates.owner = input.owner;
+      changes.push('owner');
+    }
+
+    if (input.metadata !== undefined) {
+      updates.metadata = { ...existing.metadata, ...input.metadata };
+      changes.push('metadata');
+    }
+    if (input.failureContext !== undefined) { updates.failureContext = input.failureContext; changes.push('failureContext'); }
+    if (input.retryCount !== undefined) { updates.retryCount = input.retryCount; changes.push('retryCount'); }
+  }
+
+  private applyDependencyChanges(
+    input: TaskUpdateInput, existing: Task, id: string,
+    updates: Partial<Task>, changes: string[],
+  ): void {
+    if (input.addBlockedBy?.length) {
+      updates.blockedBy = [...new Set([...existing.blockedBy, ...input.addBlockedBy])];
+      changes.push('blockedBy');
+      this.addReverseDeps(id, input.addBlockedBy, existing.blockedBy, 'blocks');
+    }
+
+    if (input.addBlocks?.length) {
+      updates.blocks = [...new Set([...existing.blocks, ...input.addBlocks])];
+      changes.push('blocks');
+      this.addReverseDeps(id, input.addBlocks, existing.blocks, 'blockedBy');
+    }
+
+    if (input.removeBlockedBy?.length) {
+      updates.blockedBy = existing.blockedBy.filter(b => !input.removeBlockedBy!.includes(b));
+      changes.push('blockedBy');
+      this.removeReverseDeps(id, input.removeBlockedBy, 'blocks');
+    }
+
+    if (input.removeBlocks?.length) {
+      updates.blocks = existing.blocks.filter(b => !input.removeBlocks!.includes(b));
+      changes.push('blocks');
+      this.removeReverseDeps(id, input.removeBlocks, 'blockedBy');
+    }
+  }
+
+  private async emitLifecycleEvents(
+    input: TaskUpdateInput, existing: Task, task: Task, id: string,
+  ): Promise<void> {
+    if (input.status === 'completed' && existing.status !== 'completed') {
+      await this.eventBus.emit('task:completed', { task });
+      await this.checkUnblockedTasks(id);
+    }
+
+    if (task.blockedBy.length > 0 && existing.blockedBy.length === 0) {
+      await this.eventBus.emit('task:blocked', { task, blockedBy: task.blockedBy });
+    }
+  }
+
+  /**
+   * Add reverse dependency links. For each targetId not already in existingIds,
+   * appends `id` to the target's `reverseField` array.
+   */
+  private addReverseDeps(
+    id: string, targetIds: string[], existingIds: string[], reverseField: 'blocks' | 'blockedBy',
+  ): void {
+    for (const targetId of targetIds) {
+      if (existingIds.includes(targetId)) continue;
+      const target = this.db.tasks.get(targetId);
+      if (target && !target[reverseField].includes(id)) {
+        this.db.tasks.update(targetId, { [reverseField]: [...target[reverseField], id] });
+      }
+    }
+  }
+
+  /**
+   * Remove `id` from each target's `reverseField` array.
+   */
+  private removeReverseDeps(
+    id: string, targetIds: string[], reverseField: 'blocks' | 'blockedBy',
+  ): void {
+    for (const targetId of targetIds) {
+      const target = this.db.tasks.get(targetId);
+      if (target) {
+        this.db.tasks.update(targetId, { [reverseField]: target[reverseField].filter(b => b !== id) });
+      }
+    }
+  }
+
+  /**
    * Check if any tasks became unblocked after a task completion
    */
   private async checkUnblockedTasks(completedTaskId: string): Promise<void> {
@@ -375,10 +385,7 @@ export class TaskManager {
 
 let globalTaskManager: TaskManager | null = null;
 
-export function createTaskManager(options: {
-  db: Database;
-  eventBus: EventBus;
-}): TaskManager {
+export function createTaskManager(options: { db: Database; eventBus: EventBus }): TaskManager {
   globalTaskManager = new TaskManager(options);
   return globalTaskManager;
 }

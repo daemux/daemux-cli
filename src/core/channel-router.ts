@@ -77,6 +77,7 @@ export class ChannelRouter {
     if (this.isDialogMode()) {
       this.taskRunner = new BackgroundTaskRunner({
         db: this.db!, eventBus: this.eventBus, config: this.config!, provider: this.provider!,
+        maxPerChat: this.config!.maxConcurrentTasks,
       });
     } else if (this.loop) {
       this.legacyHandler = new LegacyChannelHandler({

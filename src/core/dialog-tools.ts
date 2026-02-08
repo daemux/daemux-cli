@@ -23,6 +23,10 @@ const delegateTaskTool: ToolDefinition = {
         type: 'string',
         description: 'A clear description of the task to perform',
       },
+      timeBudgetMs: {
+        type: 'number',
+        description: 'Optional timeout in milliseconds for this task. Overrides the default turn timeout.',
+      },
     },
     required: ['description'],
   },
@@ -78,7 +82,10 @@ export function createDialogToolExecutors(
     if (!description?.trim()) {
       return { toolUseId, content: 'Error: description is required', isError: true };
     }
-    const result = runner.spawn(description.trim(), chatKey);
+    const timeBudgetMs = typeof input.timeBudgetMs === 'number' && input.timeBudgetMs > 0
+      ? input.timeBudgetMs
+      : undefined;
+    const result = runner.spawn(description.trim(), chatKey, undefined, { timeBudgetMs });
     if (!result.ok) {
       return { toolUseId, content: `Error: ${result.error}`, isError: true };
     }

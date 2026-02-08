@@ -6,7 +6,6 @@
 import { Command } from 'commander';
 import { createInterface } from 'readline';
 import { join } from 'path';
-import { homedir } from 'os';
 import { existsSync, mkdirSync } from 'fs';
 import { resolveCredentials, hasValidCredentials } from './auth';
 import {
@@ -25,32 +24,7 @@ import { AgenticLoop, createAgenticLoop } from '../core/loop';
 import { initLogger } from '../infra/logger';
 import { createStreamHandler, printStats } from './run-output';
 import { initializeChannels } from './run-channels';
-
-// ---------------------------------------------------------------------------
-// Anthropic Provider Loader
-// ---------------------------------------------------------------------------
-
-import type { LLMProvider } from '../core/plugin-api-types';
-
-async function loadAnthropicProvider(): Promise<LLMProvider> {
-  const paths = [
-    join(homedir(), '.daemux', 'plugins', 'anthropic-provider', 'dist', 'index.js'),
-    join(__dirname, '..', '..', '..', 'daemux-plugins', 'llm-providers', 'anthropic-provider', 'dist', 'index.js'),
-  ];
-
-  for (const p of paths) {
-    if (existsSync(p)) {
-      const mod = await import(p);
-      const provider = mod.createProvider() as LLMProvider;
-      return provider;
-    }
-  }
-
-  throw new Error(
-    'Anthropic provider plugin not found. Install it to ~/.daemux/plugins/anthropic-provider/ ' +
-    'or run: daemux plugins install @daemux/anthropic-provider',
-  );
-}
+import { loadAnthropicProvider } from './provider-loader';
 
 // ---------------------------------------------------------------------------
 // Session Management

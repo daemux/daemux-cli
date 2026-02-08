@@ -244,6 +244,28 @@ export {
   createDialogToolExecutors,
 } from './dialog-tools';
 
+// Task Verifier
+export {
+  TaskVerifier,
+  createTaskVerifier,
+  getTaskVerifier,
+  type TaskVerifierOptions,
+  type VerifyResult,
+} from './task-verifier';
+
+// Work Loop
+export {
+  WorkLoop,
+  createWorkLoop,
+  getWorkLoop,
+  type WorkLoopOptions,
+} from './work-loop';
+
+// Retry Prompt
+export {
+  buildRetryPrompt,
+} from './retry-prompt';
+
 // Error Classification
 export {
   classifyError,

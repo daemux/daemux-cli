@@ -35,6 +35,10 @@ export interface TaskRow {
   blocked_by: string;
   blocks: string;
   metadata: string;
+  time_budget_ms: number | null;
+  verify_command: string | null;
+  failure_context: string | null;
+  retry_count: number;
   created_at: number;
   updated_at: number;
 }

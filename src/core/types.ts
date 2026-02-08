@@ -33,6 +33,10 @@ export const ConfigSchema = z.object({
   mcpDebug: z.boolean().default(false),
   heartbeatIntervalMs: z.number().positive().default(1800000),
   heartbeatEnabled: z.boolean().default(false),
+  maxConcurrentTasks: z.number().min(1).max(20).default(3),
+  workPollingIntervalMs: z.number().positive().default(5000),
+  workMaxIterationsPerTask: z.number().positive().default(100),
+  workBudgetMaxTasksPerHour: z.number().positive().default(50),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -119,7 +123,7 @@ export type ToolResult = z.infer<typeof ToolResultSchema>;
 // Tasks
 // ---------------------------------------------------------------------------
 
-export const TaskStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'deleted']);
+export const TaskStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'failed', 'deleted']);
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 
 export const TaskSchema = z.object({
@@ -132,6 +136,10 @@ export const TaskSchema = z.object({
   blockedBy: z.array(z.string().uuid()).default([]),
   blocks: z.array(z.string().uuid()).default([]),
   metadata: z.record(z.unknown()).default({}),
+  timeBudgetMs: z.number().positive().optional(),
+  verifyCommand: z.string().optional(),
+  failureContext: z.string().optional(),
+  retryCount: z.number().default(0),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

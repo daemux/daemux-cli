@@ -117,6 +117,7 @@ export function createPluginAPI(context: PluginAPIContext): PluginAPI {
         blockedBy: [],
         blocks: [],
         metadata: task.metadata ?? {},
+        retryCount: 0,
       });
     },
 

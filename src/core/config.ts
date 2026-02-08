@@ -27,6 +27,10 @@ const SettingsFileSchema = z.object({
   mcpDebug: z.boolean().optional(),
   heartbeatIntervalMs: z.number().positive().optional(),
   heartbeatEnabled: z.boolean().optional(),
+  maxConcurrentTasks: z.number().min(1).max(20).optional(),
+  workPollingIntervalMs: z.number().positive().optional(),
+  workMaxIterationsPerTask: z.number().positive().optional(),
+  workBudgetMaxTasksPerHour: z.number().positive().optional(),
 }).passthrough();
 
 export type SettingsFile = z.infer<typeof SettingsFileSchema>;
@@ -60,6 +64,10 @@ const DEFAULT_CONFIG: Omit<Config, 'agentId' | 'dataDir'> = {
   mcpDebug: false,
   heartbeatIntervalMs: 1800000,
   heartbeatEnabled: false,
+  maxConcurrentTasks: 3,
+  workPollingIntervalMs: 5000,
+  workMaxIterationsPerTask: 100,
+  workBudgetMaxTasksPerHour: 50,
 };
 
 // ---------------------------------------------------------------------------
@@ -114,6 +122,10 @@ const ENV_MAPPINGS: EnvMapping[] = [
   { envKey: 'AGENT_ID', configKey: 'agentId', transform: (v) => v },
   { envKey: 'AGENT_NAME', configKey: 'agentName', transform: (v) => v },
   { envKey: 'AGENT_DATA_DIR', configKey: 'dataDir', transform: (v) => v },
+  { envKey: 'AGENT_MAX_CONCURRENT_TASKS', configKey: 'maxConcurrentTasks', transform: (v: string) => parseInt(v, 10) },
+  { envKey: 'AGENT_WORK_POLLING_INTERVAL_MS', configKey: 'workPollingIntervalMs', transform: (v: string) => parseInt(v, 10) },
+  { envKey: 'AGENT_WORK_MAX_ITERATIONS', configKey: 'workMaxIterationsPerTask', transform: (v: string) => parseInt(v, 10) },
+  { envKey: 'AGENT_WORK_BUDGET_MAX_TASKS_PER_HOUR', configKey: 'workBudgetMaxTasksPerHour', transform: (v: string) => parseInt(v, 10) },
   { envKey: 'ANTHROPIC_LOG', configKey: 'debug', transform: (v: string) => v.toLowerCase() === 'debug' },
 ];
 
@@ -250,6 +262,8 @@ export class ConfigLoader {
       'model', 'maxTokens', 'compactionThreshold', 'effectiveContextWindow',
       'queueMode', 'collectWindowMs', 'hookTimeoutMs', 'turnTimeoutMs',
       'debug', 'mcpDebug', 'heartbeatIntervalMs', 'heartbeatEnabled',
+      'maxConcurrentTasks', 'workPollingIntervalMs', 'workMaxIterationsPerTask',
+      'workBudgetMaxTasksPerHour',
     ];
 
     const config: Partial<Config> = {};

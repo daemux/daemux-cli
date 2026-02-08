@@ -15,6 +15,7 @@ import { registerUpdateCommands } from './update';
 import { registerUninstallCommand } from './uninstall';
 import { registerApprovalCommands } from './approvals';
 import { registerChannelCommands } from './channels';
+import { registerWorkCommands } from './work';
 import { setConfig, getConfig } from '../core/config';
 import { initLogger } from '../infra/logger';
 import { version as packageVersion } from '../../package.json';
@@ -79,6 +80,7 @@ function createProgram(): Command {
   registerUninstallCommand(program);
   registerApprovalCommands(program);
   registerChannelCommands(program);
+  registerWorkCommands(program);
 
   return program;
 }

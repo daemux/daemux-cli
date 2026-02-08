@@ -68,6 +68,18 @@ export interface EventMap {
   'bg-task:delegated': { taskId: string; chatKey: string; description: string };
   'bg-task:progress': { taskId: string; chatKey: string; text: string };
   'bg-task:completed': { taskId: string; chatKey: string; result: string; success: boolean };
+
+  // Task verification events
+  'task:verification_passed': { taskId: string; subject: string };
+  'task:verification_failed': { taskId: string; subject: string; attempt: number; output: string };
+
+  // Work loop events
+  'work:started': { pollingIntervalMs: number; maxConcurrent: number };
+  'work:stopped': { reason?: string };
+  'work:task-dispatched': { taskId: string; subject: string };
+  'work:task-completed': { taskId: string; subject: string; success: boolean; durationMs: number };
+  'work:budget-exhausted': { tasksThisHour: number; limit: number };
+  'work:poll': { availableTasks: number; runningTasks: number };
 }
 
 export type EventName = keyof EventMap;

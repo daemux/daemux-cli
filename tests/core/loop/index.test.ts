@@ -42,6 +42,10 @@ describe('AgenticLoop', () => {
     mcpDebug: false,
     heartbeatIntervalMs: 1800000,
     heartbeatEnabled: false,
+    maxConcurrentTasks: 3,
+    workPollingIntervalMs: 5000,
+    workMaxIterationsPerTask: 100,
+    workBudgetMaxTasksPerHour: 50,
   };
 
   beforeEach(async () => {

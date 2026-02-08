@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'crypto';
 import { AgenticLoop } from './loop';
+import { buildRetryPrompt } from './retry-prompt';
 import type { Config } from './types';
 import type { Database } from '../infra/database';
 import type { EventBus } from './event-bus';
@@ -50,6 +51,7 @@ interface TaskRecord {
   progress: string;
   loop: AgenticLoop | null;
   onComplete: TaskCompleteCallback;
+  timeBudgetMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,10 +87,19 @@ export class BackgroundTaskRunner {
     this.cleanupDelayMs = options.cleanupDelayMs ?? 60_000;
   }
 
-  spawn(description: string, chatKey: string, onComplete?: TaskCompleteCallback): SpawnResult {
+  spawn(
+    description: string,
+    chatKey: string,
+    onComplete?: TaskCompleteCallback,
+    options?: { timeBudgetMs?: number; failureContext?: string; retryCount?: number },
+  ): SpawnResult {
     if (this.getTasksForChat(chatKey).length >= this.maxPerChat) {
       return { ok: false, error: `Concurrency limit reached (${this.maxPerChat} tasks max per chat)` };
     }
+
+    const effectiveDescription = buildRetryPrompt(
+      description, options?.failureContext, options?.retryCount ?? 0,
+    );
 
     const taskId = randomUUID();
     const loop = new AgenticLoop({
@@ -100,18 +111,19 @@ export class BackgroundTaskRunner {
 
     const record: TaskRecord = {
       id: taskId,
-      description,
+      description: effectiveDescription,
       chatKey,
       status: 'running',
       startedAt: Date.now(),
       progress: '',
       loop,
       onComplete: onComplete ?? (() => {}),
+      timeBudgetMs: options?.timeBudgetMs,
     };
 
     this.tasks.set(taskId, record);
 
-    void this.eventBus.emit('bg-task:delegated', { taskId, chatKey, description });
+    void this.eventBus.emit('bg-task:delegated', { taskId, chatKey, description: effectiveDescription });
     this.startTask(record);
 
     return { ok: true, taskId };
@@ -178,7 +190,12 @@ export class BackgroundTaskRunner {
       });
     };
 
-    record.loop!.run(record.description, { onStream })
+    const loopConfig: { onStream: typeof onStream; timeoutMs?: number } = { onStream };
+    if (record.timeBudgetMs) {
+      loopConfig.timeoutMs = record.timeBudgetMs;
+    }
+
+    record.loop!.run(record.description, loopConfig)
       .then(result => {
         if (record.status === 'cancelled') return;
         const response = result.response || 'Task completed with no output';

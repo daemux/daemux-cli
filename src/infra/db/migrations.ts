@@ -20,6 +20,9 @@ export function runMigrations(db: BunSQLite, vecEnabled: boolean): void {
   if (currentVersion < 2) {
     applyMigrationV2(db);
   }
+  if (currentVersion < 3) {
+    applyMigrationV3(db);
+  }
 }
 
 function getCurrentSchemaVersion(db: BunSQLite): number {
@@ -175,4 +178,12 @@ function applyMigrationV1(db: BunSQLite, vecEnabled: boolean): void {
 function applyMigrationV2(db: BunSQLite): void {
   db.run('ALTER TABLE sessions ADD COLUMN thinking_level TEXT');
   db.run('INSERT INTO schema_version (version, applied_at) VALUES (2, ?)', [Date.now()]);
+}
+
+function applyMigrationV3(db: BunSQLite): void {
+  db.run('ALTER TABLE tasks ADD COLUMN time_budget_ms INTEGER');
+  db.run('ALTER TABLE tasks ADD COLUMN verify_command TEXT');
+  db.run('ALTER TABLE tasks ADD COLUMN failure_context TEXT');
+  db.run('ALTER TABLE tasks ADD COLUMN retry_count INTEGER DEFAULT 0');
+  db.run('INSERT INTO schema_version (version, applied_at) VALUES (3, ?)', [Date.now()]);
 }

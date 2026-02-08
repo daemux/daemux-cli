@@ -20,6 +20,10 @@ export function createTasksRepository(db: BunSQLite) {
     blockedBy: JSON.parse(row.blocked_by || '[]'),
     blocks: JSON.parse(row.blocks || '[]'),
     metadata: JSON.parse(row.metadata || '{}'),
+    timeBudgetMs: row.time_budget_ms ?? undefined,
+    verifyCommand: row.verify_command ?? undefined,
+    failureContext: row.failure_context ?? undefined,
+    retryCount: row.retry_count ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -30,8 +34,8 @@ export function createTasksRepository(db: BunSQLite) {
       const now = Date.now();
 
       db.run(
-        `INSERT INTO tasks (id, subject, description, active_form, status, owner, blocked_by, blocks, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO tasks (id, subject, description, active_form, status, owner, blocked_by, blocks, metadata, time_budget_ms, verify_command, failure_context, retry_count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           task.subject,
@@ -42,6 +46,10 @@ export function createTasksRepository(db: BunSQLite) {
           JSON.stringify(task.blockedBy ?? []),
           JSON.stringify(task.blocks ?? []),
           JSON.stringify(task.metadata ?? {}),
+          task.timeBudgetMs ?? null,
+          task.verifyCommand ?? null,
+          task.failureContext ?? null,
+          task.retryCount ?? 0,
           now,
           now,
         ]
@@ -54,6 +62,7 @@ export function createTasksRepository(db: BunSQLite) {
         blockedBy: task.blockedBy ?? [],
         blocks: task.blocks ?? [],
         metadata: task.metadata ?? {},
+        retryCount: task.retryCount ?? 0,
         createdAt: now,
         updatedAt: now,
       };
@@ -99,6 +108,22 @@ export function createTasksRepository(db: BunSQLite) {
       if (updates.metadata !== undefined) {
         fields.push('metadata = ?');
         values.push(JSON.stringify(updates.metadata));
+      }
+      if (updates.timeBudgetMs !== undefined) {
+        fields.push('time_budget_ms = ?');
+        values.push(updates.timeBudgetMs);
+      }
+      if (updates.verifyCommand !== undefined) {
+        fields.push('verify_command = ?');
+        values.push(updates.verifyCommand);
+      }
+      if (updates.failureContext !== undefined) {
+        fields.push('failure_context = ?');
+        values.push(updates.failureContext);
+      }
+      if (updates.retryCount !== undefined) {
+        fields.push('retry_count = ?');
+        values.push(updates.retryCount);
       }
 
       values.push(id);
@@ -161,6 +186,10 @@ export function createTasksRepository(db: BunSQLite) {
         const blocks = blocker.blocks.filter(id => id !== taskId);
         this.update(blockedBy, { blocks });
       }
+    },
+
+    clearOwner: (id: string): void => {
+      db.run('UPDATE tasks SET owner = NULL, updated_at = ? WHERE id = ?', [Date.now(), id]);
     },
 
     getBlocked: (): Task[] => {
