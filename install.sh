@@ -225,7 +225,7 @@ fetch_release_artifacts() {
     TARBALL_PATH="$tarball_path"
 }
 
-# --- Install binary and run post-install setup --------------------------------
+# --- Install binary -----------------------------------------------------------
 install_and_setup() {
     local tarball_path="$1"
     local install_dir="${DAEMUX_DATA_DIR}/versions/${VERSION}"
@@ -234,7 +234,6 @@ install_and_setup() {
     if [ "$DRY_RUN" = true ]; then
         msg info "[DRY RUN] Extract to $install_dir"
         msg info "[DRY RUN] Symlink $symlink_path -> $install_dir/daemux"
-        msg info "[DRY RUN] Run: $symlink_path setup"
         return 0
     fi
 
@@ -254,15 +253,6 @@ install_and_setup() {
     msg ok "Installed daemux v${VERSION}"
 
     rm -rf "$(dirname "$tarball_path")"
-
-    if [ -x "$symlink_path" ]; then
-        msg info "Running post-install setup..."
-        "$symlink_path" setup 2>&1 \
-            || msg warn "Post-install setup had warnings (non-fatal)"
-        msg ok "Post-install setup complete"
-    else
-        msg warn "Skipping post-install setup: daemux binary not executable"
-    fi
 }
 
 # --- Bun runtime (version check + install) ------------------------------------
@@ -312,6 +302,56 @@ ensure_bun() {
     fi
 }
 
+# --- Persist PATH in shell RC if needed ---------------------------------------
+ensure_path_in_shell_rc() {
+    case ":${PATH}:" in *":${DAEMUX_BIN_DIR}:"*) return 0 ;; esac
+
+    if [ "$DRY_RUN" = true ]; then
+        msg info "[DRY RUN] Would add ${DAEMUX_BIN_DIR} to shell config"
+        return 0
+    fi
+
+    local shell_name rc_file export_line
+    shell_name=$(basename "${SHELL:-bash}")
+
+    case "$shell_name" in
+        zsh)  rc_file="${HOME}/.zshrc" ;;
+        bash)
+            if [ -f "${HOME}/.bashrc" ]; then
+                rc_file="${HOME}/.bashrc"
+            elif [ -f "${HOME}/.bash_profile" ]; then
+                rc_file="${HOME}/.bash_profile"
+            else
+                rc_file="${HOME}/.profile"
+            fi
+            ;;
+        fish) rc_file="${HOME}/.config/fish/config.fish" ;;
+        *)    rc_file="${HOME}/.profile" ;;
+    esac
+
+    if [ -f "$rc_file" ] && grep -qF "${DAEMUX_BIN_DIR}" "$rc_file" 2>/dev/null; then
+        msg ok "PATH already configured in ${rc_file}"
+        return 0
+    fi
+
+    if [ "$shell_name" = "fish" ]; then
+        export_line="fish_add_path ${DAEMUX_BIN_DIR}"
+    else
+        export_line="export PATH=\"${DAEMUX_BIN_DIR}:\$PATH\""
+    fi
+
+    mkdir -p "$(dirname "$rc_file")"
+
+    if ! { echo ""; echo "# daemux"; echo "$export_line"; } >> "$rc_file" 2>/dev/null; then
+        msg warn "Could not write to ${rc_file}. Please add manually:"
+        msg warn "  $export_line"
+        return 0
+    fi
+
+    msg ok "Added ${DAEMUX_BIN_DIR} to PATH in ${rc_file}"
+    export PATH="${DAEMUX_BIN_DIR}:${PATH}"
+}
+
 # --- Completion banner with PATH advice ---------------------------------------
 print_completion() {
     echo ""
@@ -328,26 +368,13 @@ print_completion() {
     echo ""
     echo "  To uninstall later:          daemux uninstall"
     echo ""
-    case ":${PATH}:" in *":${DAEMUX_BIN_DIR}:"*) return 0 ;; esac
-    local shell_name shell_rc
-    shell_name=$(basename "${SHELL:-bash}")
-    case "$shell_name" in
-        zsh)  shell_rc="\$HOME/.zshrc" ;;
-        bash) shell_rc="\$HOME/.bashrc" ;;
-        fish) shell_rc="\$HOME/.config/fish/config.fish" ;;
-        *)    shell_rc="\$HOME/.profile" ;;
-    esac
-    echo ""
-    msg warn "${DAEMUX_BIN_DIR} is not in your PATH."
-    echo "  Add it by running:"
-    if [ "$shell_name" = "fish" ]; then
-        echo "    fish_add_path ${DAEMUX_BIN_DIR}"
-    else
-        echo "    echo 'export PATH=\"${DAEMUX_BIN_DIR}:\$PATH\"' >> ${shell_rc}"
-    fi
-    echo ""
-    echo "  Then reload your shell:  exec ${shell_name}"
-    echo ""
+    case ":${PATH}:" in *":${DAEMUX_BIN_DIR}:"*) ;; *)
+        local shell_name
+        shell_name=$(basename "${SHELL:-bash}")
+        echo ""
+        msg info "Restart your shell to activate PATH changes:  exec ${shell_name}"
+        echo ""
+    ;; esac
 }
 
 # --- Main ---------------------------------------------------------------------
@@ -387,6 +414,7 @@ main() {
     fetch_release_artifacts
     install_and_setup "$TARBALL_PATH"
     ensure_bun
+    ensure_path_in_shell_rc
     print_completion
 }
 
