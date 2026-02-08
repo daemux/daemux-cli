@@ -375,6 +375,7 @@ main() {
     command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 \
         || missing+=("sha256sum or shasum")
     command -v tar >/dev/null 2>&1 || missing+=("tar")
+    command -v unzip >/dev/null 2>&1 || missing+=("unzip")
     if [ ${#missing[@]} -gt 0 ]; then
         msg err "Missing required dependencies:"
         for dep in "${missing[@]}"; do echo "  - $dep"; done

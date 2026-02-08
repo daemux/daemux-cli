@@ -191,7 +191,7 @@ create_tarballs() {
         fi
 
         log info "Creating $tarball_name..."
-        tar -czf "$tarball_path" -C "$staging_dir" daemux
+        tar -czf "$tarball_path" -C "$staging_dir/daemux" .
         log success "Created $tarball_name"
     done
 

@@ -1,8 +1,9 @@
 {
   "name": "daemux",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Universal Autonomous Agent Platform",
   "type": "module",
+  "workspaces": ["packages/*"],
   "main": "dist/index.js",
   "bin": {
     "daemux": "./src/cli/index.ts"
@@ -12,7 +13,7 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target bun && bun build ./src/cli/index.ts --outdir ./dist/cli --target bun",
     "dev": "bun run --watch src/cli/index.ts",
     "test": "bun test",
-    "lint": "oxlint src/",
+    "lint": "oxlint src/ packages/",
     "typecheck": "tsc --noEmit",
     "compile": "bun build --compile --outfile=dist/daemux ./src/cli/index.ts",
     "setup": "./scripts/setup.sh",
@@ -20,6 +21,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.73.0",
+    "@daemux/mcp-client": "workspace:*",
+    "@daemux/service": "workspace:*",
+    "@daemux/updater": "workspace:*",
     "commander": "^14.0.0",
     "sqlite-vec": "^0.1.6",
     "zod": "^3.24.0"
