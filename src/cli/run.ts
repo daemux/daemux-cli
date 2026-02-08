@@ -271,8 +271,8 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
   const eventBus = createEventBus();
   const loop = createAgenticLoop({ db, eventBus, config, provider });
 
-  // Initialize channels (Telegram, etc.)
-  const { router, channelIds } = await initializeChannels(eventBus, loop, logger);
+  // Initialize channels (Telegram, etc.) with dialog mode dependencies
+  const { router, channelIds } = await initializeChannels(eventBus, loop, logger, { db, provider, config });
 
   let cleanedUp = false;
   async function cleanup(): Promise<void> {

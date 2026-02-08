@@ -136,6 +136,12 @@ export class AgenticLoop {
       eventBus: this.eventBus, allowedTools: tools.map(t => t.name),
     });
 
+    if (loopConfig.toolExecutors) {
+      for (const [name, executor] of loopConfig.toolExecutors) {
+        toolExecutor.registerExecutor(name, executor);
+      }
+    }
+
     const context = await this.contextBuilder.build(
       loopConfig.sessionId ?? randomUUID(), systemPrompt,
     );

@@ -13,6 +13,9 @@ import type { EnhancedChannel } from '../core/channel-types';
 import type { AgenticLoop } from '../core/loop';
 import type { EventBus } from '../core/event-bus';
 import type { Logger } from '../infra/logger';
+import type { Config } from '../core/types';
+import type { Database } from '../infra/database';
+import type { LLMProvider } from '../core/plugin-api-types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,6 +86,7 @@ export async function initializeChannels(
   eventBus: EventBus,
   loop: AgenticLoop,
   logger: Logger,
+  deps?: { db: Database; provider: LLMProvider; config: Config },
 ): Promise<ChannelInitResult> {
   const channelConfigs = loadChannelSettings();
   if (channelConfigs.size === 0) return NO_CHANNELS;
@@ -124,7 +128,10 @@ export async function initializeChannels(
 
   warnIfClaudeCodeCredentials(logger);
 
-  const router = createChannelRouter({ loop, channelManager, eventBus, transcriptionProvider, logger });
+  const router = createChannelRouter({
+    loop, channelManager, eventBus, transcriptionProvider, logger,
+    db: deps?.db, provider: deps?.provider, config: deps?.config,
+  });
   router.start();
 
   const channelIds = channelManager.list().map(c => c.id);

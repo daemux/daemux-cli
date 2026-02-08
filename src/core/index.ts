@@ -224,3 +224,27 @@ export {
   getChannelRouter,
   type ChannelRouterOptions,
 } from './channel-router';
+
+// Chat Session
+export {
+  ChatSession,
+} from './chat-session';
+
+// Background Task Runner
+export {
+  BackgroundTaskRunner,
+  type TaskInfo,
+  type TaskStatus as BackgroundTaskStatus,
+  type SpawnResult,
+} from './background-task-runner';
+
+// Dialog Tools
+export {
+  DIALOG_TOOLS,
+  createDialogToolExecutors,
+} from './dialog-tools';
+
+// Error Classification
+export {
+  classifyError,
+} from './error-classify';

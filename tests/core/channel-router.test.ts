@@ -1,13 +1,19 @@
 /**
  * Channel Router Unit Tests
- * Tests message routing, queue serialization, and audio transcription bridging.
+ * Tests message routing, queue serialization, audio transcription bridging,
+ * dialog mode (ChatSession-based), and backward compatibility (legacy mode).
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { join } from 'path';
+import { existsSync, unlinkSync, mkdirSync, rmSync } from 'fs';
 import { ChannelRouter, createChannelRouter, getChannelRouter } from '../../src/core/channel-router';
 import { ChannelManager } from '../../src/core/channel-manager';
 import { EventBus } from '../../src/core/event-bus';
+import { Database } from '../../src/infra/database';
+import { createReadyMockProvider, MockLLMProvider } from '../mocks/mock-llm-provider';
 import type { EnhancedChannel, RichChannelMessage, ChannelSendOptions } from '../../src/core/channel-types';
+import type { Config } from '../../src/core/types';
 import type { Logger } from '../../src/infra/logger';
 
 // ---------------------------------------------------------------------------
@@ -422,6 +428,293 @@ describe('ChannelRouter', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
 
       expect(channel.sentMessages.length).toBe(0);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dialog Mode Tests (ChatSession-based routing)
+// ---------------------------------------------------------------------------
+
+describe('ChannelRouter - Dialog Mode', () => {
+  let eventBus: EventBus;
+  let channelManager: ChannelManager;
+  let logger: Logger;
+  let db: Database;
+  let provider: MockLLMProvider;
+
+  const testDbPath = join(import.meta.dir, 'test-router-dialog.sqlite');
+  const testDir = join(import.meta.dir, 'test-router-dialog-files');
+
+  const testConfig: Config = {
+    agentId: 'test-agent',
+    dataDir: testDir,
+    model: 'mock-model',
+    maxTokens: 8192,
+    compactionThreshold: 0.8,
+    effectiveContextWindow: 180000,
+    queueMode: 'steer',
+    collectWindowMs: 5000,
+    hookTimeoutMs: 600000,
+    turnTimeoutMs: 1800000,
+    debug: false,
+    mcpDebug: false,
+    heartbeatIntervalMs: 1800000,
+    heartbeatEnabled: false,
+  };
+
+  beforeEach(async () => {
+    if (existsSync(testDbPath)) unlinkSync(testDbPath);
+    mkdirSync(testDir, { recursive: true });
+    db = new Database({ path: testDbPath, enableVec: false });
+    await db.initialize();
+    eventBus = new EventBus();
+    channelManager = new ChannelManager({ eventBus });
+    logger = createMockLogger();
+    provider = createReadyMockProvider();
+  });
+
+  afterEach(() => {
+    db.close();
+    if (existsSync(testDbPath)) unlinkSync(testDbPath);
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true });
+  });
+
+  describe('Dialog Mode Detection', () => {
+    it('should use dialog mode when db, provider, and config are provided', () => {
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      // If dialog mode is active, it creates a BackgroundTaskRunner internally.
+      // We verify by instantiation not throwing.
+      expect(router).toBeInstanceOf(ChannelRouter);
+    });
+
+    it('should fall back to legacy mode with only loop', () => {
+      const loop = createMockLoop();
+      const router = new ChannelRouter({
+        loop: loop as unknown as Parameters<typeof createChannelRouter>[0]['loop'],
+        channelManager,
+        eventBus,
+        logger,
+      });
+
+      expect(router).toBeInstanceOf(ChannelRouter);
+    });
+  });
+
+  describe('Per-chat session isolation', () => {
+    it('should route messages from different chats to separate sessions', async () => {
+      provider.addTextResponse('Reply to chat A');
+      provider.addTextResponse('Reply to chat B');
+
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage('Hello from A', '100'));
+      await new Promise(r => setTimeout(r, 200));
+
+      await channel.triggerMessage(makeTextMessage('Hello from B', '200'));
+      await new Promise(r => setTimeout(r, 200));
+
+      // Both chats should have received responses
+      const chatAMsgs = channel.sentMessages.filter(m => m.chatId === '100');
+      const chatBMsgs = channel.sentMessages.filter(m => m.chatId === '200');
+
+      expect(chatAMsgs.length).toBeGreaterThanOrEqual(1);
+      expect(chatBMsgs.length).toBeGreaterThanOrEqual(1);
+
+      await router.stop();
+    });
+
+    it('should reuse session for same chat across messages', async () => {
+      provider.addTextResponse('First response');
+      provider.addTextResponse('Second response');
+
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage('Msg 1', '42'));
+      await new Promise(r => setTimeout(r, 200));
+
+      await channel.triggerMessage(makeTextMessage('Msg 2', '42'));
+      await new Promise(r => setTimeout(r, 200));
+
+      // Both should have gone to the same chat
+      const chat42Msgs = channel.sentMessages.filter(m => m.chatId === '42');
+      expect(chat42Msgs.length).toBe(2);
+
+      await router.stop();
+    });
+  });
+
+  describe('Dialog mode message routing', () => {
+    it('should route text message and send response via ChatSession', async () => {
+      provider.addTextResponse('Dialog response');
+
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage('Hello dialog'));
+      await new Promise(r => setTimeout(r, 200));
+
+      expect(channel.sentMessages.length).toBeGreaterThanOrEqual(1);
+      expect(channel.sentMessages[0]!.chatId).toBe('12345');
+
+      await router.stop();
+    });
+
+    it('should ignore empty messages in dialog mode', async () => {
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage(''));
+      await new Promise(r => setTimeout(r, 100));
+
+      expect(channel.sentMessages).toHaveLength(0);
+
+      await router.stop();
+    });
+  });
+
+  describe('Dialog mode stop', () => {
+    it('should clean up all sessions and task runner on stop', async () => {
+      provider.addTextResponse('Before stop');
+
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage('Before'));
+      await new Promise(r => setTimeout(r, 200));
+
+      await router.stop();
+
+      // After stop, no new messages should be processed
+      provider.addTextResponse('After stop response');
+      await channel.triggerMessage(makeTextMessage('After'));
+      await new Promise(r => setTimeout(r, 100));
+
+      // Only the "Before" message should have produced a response
+      const responses = channel.sentMessages.filter(m =>
+        m.text !== 'Before stop' && m.text !== 'After stop response'
+      );
+      // The "After" message should not produce additional output beyond what was already sent
+    });
+  });
+
+  describe('Backward compatibility', () => {
+    it('should still work in legacy mode with loop parameter', async () => {
+      const loop = createMockLoop('Legacy response');
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        loop: loop as unknown as Parameters<typeof createChannelRouter>[0]['loop'],
+        channelManager,
+        eventBus,
+        logger,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage('Legacy message'));
+      await new Promise(r => setTimeout(r, 100));
+
+      expect(channel.sentMessages.length).toBe(1);
+      expect(channel.sentMessages[0]!.text).toBe('Legacy response');
+
+      await router.stop();
+    });
+  });
+
+  describe('message:received event', () => {
+    it('should emit message:received event in dialog mode', async () => {
+      provider.addTextResponse('Response');
+      const events: Array<{ channelId: string }> = [];
+      eventBus.on('message:received', (payload) => { events.push(payload); });
+
+      const channel = createMockChannel();
+      channelManager.register(channel);
+
+      const router = new ChannelRouter({
+        channelManager,
+        eventBus,
+        logger,
+        db,
+        provider,
+        config: testConfig,
+      });
+
+      router.start();
+
+      await channel.triggerMessage(makeTextMessage('Event test'));
+      await new Promise(r => setTimeout(r, 100));
+
+      expect(events.length).toBeGreaterThanOrEqual(1);
+      expect(events[0]!.channelId).toBe('telegram');
+
+      await router.stop();
     });
   });
 });

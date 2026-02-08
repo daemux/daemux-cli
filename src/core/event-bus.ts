@@ -63,6 +63,11 @@ export interface EventMap {
   'schedule:started': Record<string, never>;
   'schedule:stopped': Record<string, never>;
   'schedule:triggered': { scheduleId: string; taskTemplate: { subject: string; description: string } };
+
+  // Background task delegation events
+  'bg-task:delegated': { taskId: string; chatKey: string; description: string };
+  'bg-task:progress': { taskId: string; chatKey: string; text: string };
+  'bg-task:completed': { taskId: string; chatKey: string; result: string; success: boolean };
 }
 
 export type EventName = keyof EventMap;

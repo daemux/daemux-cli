@@ -1,7 +1,7 @@
 /**
  * Channel Router
- * Bridges channel messages to the AgenticLoop and routes responses back.
- * Handles audio transcription, message serialization, and error delivery.
+ * Bridges channel messages to ChatSessions and routes responses back.
+ * Handles audio transcription, per-chat session management, and error delivery.
  */
 
 import type { AgenticLoop } from './loop';
@@ -10,56 +10,86 @@ import type { EventBus } from './event-bus';
 import type { EnhancedChannel, RichChannelMessage } from './channel-types';
 import type { TranscriptionProvider } from './transcription';
 import type { Logger } from '../infra/logger';
-
-// ---------------------------------------------------------------------------
-// Queue Item
-// ---------------------------------------------------------------------------
-
-interface QueueItem {
-  message: RichChannelMessage;
-  channel: EnhancedChannel;
-  text: string;
-}
+import type { Config } from './types';
+import type { Database } from '../infra/database';
+import type { LLMProvider } from './plugin-api-types';
+import { ChatSession } from './chat-session';
+import { BackgroundTaskRunner } from './background-task-runner';
+import { LegacyChannelHandler } from './legacy-channel-handler';
 
 // ---------------------------------------------------------------------------
 // Channel Router Options
 // ---------------------------------------------------------------------------
 
 export interface ChannelRouterOptions {
-  loop: AgenticLoop;
+  /** @deprecated Kept for backward compatibility. When db/provider/config are provided, ChatSession is used instead. */
+  loop?: AgenticLoop;
   channelManager: ChannelManager;
   eventBus: EventBus;
   transcriptionProvider?: TranscriptionProvider;
   logger: Logger;
+  db?: Database;
+  provider?: LLMProvider;
+  config?: Config;
 }
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const SESSION_IDLE_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // ---------------------------------------------------------------------------
 // Channel Router
 // ---------------------------------------------------------------------------
 
 export class ChannelRouter {
-  private loop: AgenticLoop;
+  private loop: AgenticLoop | null;
   private channelManager: ChannelManager;
   private eventBus: EventBus;
   private transcription: TranscriptionProvider | null;
   private logger: Logger;
-  private queue: QueueItem[] = [];
-  private processing = false;
-  private sessions: Map<string, string> = new Map();
+  private chatSessions: Map<string, ChatSession> = new Map();
+  private chatSessionLastActive: Map<string, number> = new Map();
+  private taskRunner: BackgroundTaskRunner | null = null;
   private unsubscribers: Array<() => void> = [];
-  private stopped = false;
+  private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Dependencies for ChatSession creation (dialog mode)
+  private db: Database | null;
+  private provider: LLMProvider | null;
+  private config: Config | null;
+
+  // Legacy handler for backward compat (loop-based mode)
+  private legacyHandler: LegacyChannelHandler | null = null;
 
   constructor(options: ChannelRouterOptions) {
-    this.loop = options.loop;
+    this.loop = options.loop ?? null;
     this.channelManager = options.channelManager;
     this.eventBus = options.eventBus;
     this.transcription = options.transcriptionProvider ?? null;
     this.logger = options.logger;
+    this.db = options.db ?? null;
+    this.provider = options.provider ?? null;
+    this.config = options.config ?? null;
+
+    if (this.isDialogMode()) {
+      this.taskRunner = new BackgroundTaskRunner({
+        db: this.db!, eventBus: this.eventBus, config: this.config!, provider: this.provider!,
+      });
+    } else if (this.loop) {
+      this.legacyHandler = new LegacyChannelHandler({
+        loop: this.loop,
+        eventBus: this.eventBus,
+        logger: this.logger,
+        resolveChatId: (msg) => this.resolveChatId(msg),
+      });
+    }
   }
 
   /** Wire all registered channels' message events to the router */
   start(): void {
-    this.stopped = false;
     for (const channel of this.channelManager.list()) {
       const unsub = channel.on('message', async (message: RichChannelMessage) => {
         await this.handleMessage(message, channel);
@@ -71,6 +101,10 @@ export class ChannelRouter {
       });
       this.unsubscribers.push(errorUnsub);
     }
+    if (this.isDialogMode()) {
+      this.idleCheckTimer = setInterval(() => this.evictIdleSessions(), SESSION_IDLE_CHECK_INTERVAL_MS);
+    }
+
     this.logger.info('ChannelRouter started', {
       channelCount: String(this.channelManager.list().length),
     });
@@ -78,12 +112,20 @@ export class ChannelRouter {
 
   /** Stop processing, flush queue, disconnect channels */
   async stop(): Promise<void> {
-    this.stopped = true;
-    for (const unsub of this.unsubscribers) {
-      unsub();
+    if (this.idleCheckTimer) {
+      clearInterval(this.idleCheckTimer);
+      this.idleCheckTimer = null;
     }
+    for (const unsub of this.unsubscribers) unsub();
     this.unsubscribers = [];
-    this.queue = [];
+    if (this.legacyHandler) this.legacyHandler.stop();
+
+    for (const session of this.chatSessions.values()) session.stop();
+    this.chatSessions.clear();
+    this.chatSessionLastActive.clear();
+
+    if (this.taskRunner) this.taskRunner.stopAll();
+
     await this.channelManager.disconnectAll();
     this.logger.info('ChannelRouter stopped');
   }
@@ -92,18 +134,12 @@ export class ChannelRouter {
   // Message Handling
   // -----------------------------------------------------------------------
 
-  private async handleMessage(
-    message: RichChannelMessage,
-    channel: EnhancedChannel,
-  ): Promise<void> {
+  private async handleMessage(message: RichChannelMessage, channel: EnhancedChannel): Promise<void> {
     try {
       await this.eventBus.emit('message:received', {
         message: {
-          uuid: message.id,
-          parentUuid: null,
-          role: 'user' as const,
-          content: message.content,
-          createdAt: message.timestamp,
+          uuid: message.id, parentUuid: null, role: 'user' as const,
+          content: message.content, createdAt: message.timestamp,
         },
         channelId: channel.id,
       });
@@ -123,11 +159,14 @@ export class ChannelRouter {
       const trimmed = text?.trim();
       if (!trimmed) return;
 
-      this.enqueue({ message, channel, text: trimmed });
+      if (this.isDialogMode()) {
+        await this.routeToSession(trimmed, message, channel);
+      } else if (this.legacyHandler) {
+        this.legacyHandler.enqueue({ message, channel, text: trimmed });
+      }
     } catch (err) {
       this.logger.error('Failed to handle channel message', {
-        channelId: channel.id,
-        messageId: message.id,
+        channelId: channel.id, messageId: message.id,
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -141,9 +180,49 @@ export class ChannelRouter {
 
   private resolveChatId(message: RichChannelMessage): string {
     const meta = message.metadata as Record<string, unknown>;
-    return String(
-      meta['chatId'] ?? meta['telegramChatId'] ?? message.channelId ?? message.senderId,
-    );
+    return String(meta['chatId'] ?? meta['telegramChatId'] ?? message.channelId ?? message.senderId);
+  }
+
+  // -----------------------------------------------------------------------
+  // Dialog Mode (ChatSession-based)
+  // -----------------------------------------------------------------------
+
+  private isDialogMode(): boolean {
+    return this.db !== null && this.provider !== null && this.config !== null;
+  }
+
+  private async routeToSession(
+    text: string, message: RichChannelMessage, channel: EnhancedChannel,
+  ): Promise<void> {
+    const chatId = this.resolveChatId(message);
+    const sessionKey = `${channel.id}:${chatId}`;
+
+    let session = this.chatSessions.get(sessionKey);
+    if (!session) {
+      session = new ChatSession({
+        chatKey: sessionKey, chatId, channel,
+        db: this.db!, eventBus: this.eventBus, config: this.config!,
+        provider: this.provider!, taskRunner: this.taskRunner!,
+      });
+      this.chatSessions.set(sessionKey, session);
+    }
+    this.chatSessionLastActive.set(sessionKey, Date.now());
+
+    await session.handleMessage(text, message);
+  }
+
+  private evictIdleSessions(): void {
+    const now = Date.now();
+    for (const [key, lastActive] of this.chatSessionLastActive) {
+      if (now - lastActive < SESSION_IDLE_TIMEOUT_MS) continue;
+      const session = this.chatSessions.get(key);
+      if (session) {
+        session.stop();
+        this.chatSessions.delete(key);
+      }
+      this.chatSessionLastActive.delete(key);
+      this.logger.info('Evicted idle chat session', { sessionKey: key });
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -151,8 +230,7 @@ export class ChannelRouter {
   // -----------------------------------------------------------------------
 
   private async transcribeAudio(
-    message: RichChannelMessage,
-    channel: EnhancedChannel,
+    message: RichChannelMessage, channel: EnhancedChannel,
   ): Promise<string | null> {
     if (!this.transcription) {
       this.logger.warn('No transcription provider configured, skipping audio');
@@ -164,11 +242,7 @@ export class ChannelRouter {
 
     try {
       const file = await channel.downloadAttachment(attachment.url);
-      const result = await this.transcription.transcribe(
-        file.data,
-        file.fileName ?? 'audio.ogg',
-      );
-
+      const result = await this.transcription.transcribe(file.data, file.fileName ?? 'audio.ogg');
       const prefix = message.content ? `${message.content}\n\n` : '';
       return `${prefix}[Voice message transcription]: ${result.text}`;
     } catch (err) {
@@ -179,92 +253,6 @@ export class ChannelRouter {
     }
   }
 
-  // -----------------------------------------------------------------------
-  // Serialization Queue
-  // -----------------------------------------------------------------------
-
-  private enqueue(item: QueueItem): void {
-    this.queue.push(item);
-    if (!this.processing) {
-      void this.processNext();
-    }
-  }
-
-  private async processNext(): Promise<void> {
-    if (this.stopped || this.queue.length === 0) {
-      this.processing = false;
-      return;
-    }
-
-    this.processing = true;
-    const item = this.queue.shift()!;
-
-    try {
-      await this.processMessage(item);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      this.logger.error('Failed to process queued message', { error: errorMsg });
-      try {
-        const chatId = this.resolveChatId(item.message);
-        const userMessage = this.classifyProcessingError(errorMsg);
-        await item.channel.sendText(chatId, userMessage);
-      } catch {
-        // Swallow send errors during error handling
-      }
-    }
-
-    if (!this.stopped) {
-      void this.processNext();
-    }
-  }
-
-  private classifyProcessingError(errorMsg: string): string {
-    const lower = errorMsg.toLowerCase();
-    if (lower.includes('only authorized for use with claude code') || lower.includes('credential')) {
-      return 'Bot API credentials are not configured correctly. Please set a valid Anthropic API key in ~/.daemux/settings.json (anthropicApiKey field).';
-    }
-    if (lower.includes('authentication') || lower.includes('401') || lower.includes('invalid api key')) {
-      return 'Bot authentication failed. Please check your API key configuration.';
-    }
-    if (lower.includes('rate limit') || lower.includes('429')) {
-      return 'The service is temporarily rate-limited. Please try again in a moment.';
-    }
-    if (lower.includes('overloaded') || lower.includes('529')) {
-      return 'The AI service is currently overloaded. Please try again shortly.';
-    }
-    return 'An error occurred while processing your message.';
-  }
-
-  private async processMessage(item: QueueItem): Promise<void> {
-    const { message, channel, text } = item;
-    const chatId = this.resolveChatId(message);
-    const sessionKey = `${channel.id}:${chatId}`;
-    const existingSessionId = this.sessions.get(sessionKey);
-
-    const result = await this.loop.run(text, {
-      sessionId: existingSessionId,
-    });
-
-    this.sessions.set(sessionKey, result.sessionId);
-
-    if (result.response?.trim()) {
-      const sentId = await channel.sendText(chatId, result.response, {
-        parseMode: 'markdown',
-        replyToId: message.id,
-      });
-
-      await this.eventBus.emit('message:sent', {
-        message: {
-          uuid: sentId,
-          parentUuid: null,
-          role: 'assistant' as const,
-          content: result.response,
-          createdAt: Date.now(),
-        },
-        channelId: channel.id,
-      });
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

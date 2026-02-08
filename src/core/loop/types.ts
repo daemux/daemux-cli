@@ -2,7 +2,7 @@
  * Agentic Loop Types
  */
 
-import type { Message, ToolDefinition, AgentDefinition, Config } from '../types';
+import type { Message, ToolDefinition, ToolResult, AgentDefinition } from '../types';
 
 // ---------------------------------------------------------------------------
 // Loop Configuration
@@ -13,6 +13,8 @@ export interface LoopConfig {
   agent?: AgentDefinition;
   systemPrompt?: string;
   tools?: ToolDefinition[];
+  /** Custom tool executors to register on the ToolExecutor instance */
+  toolExecutors?: Map<string, (id: string, input: Record<string, unknown>) => Promise<ToolResult>>;
   maxIterations?: number;
   timeoutMs?: number;
   compactionThreshold?: number;
