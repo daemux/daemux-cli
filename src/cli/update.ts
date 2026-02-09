@@ -15,8 +15,8 @@ import {
   info,
   error as errorColor,
 } from './utils';
-import { Updater } from '../updater';
-import type { UpdateState } from '../updater';
+import { Updater } from '@daemux/updater';
+import type { UpdateState } from '@daemux/updater';
 
 // ---------------------------------------------------------------------------
 // Formatting Helpers

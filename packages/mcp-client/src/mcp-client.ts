@@ -3,9 +3,7 @@
  * Connects to MCP servers via subprocess, communicates using JSON-RPC 2.0
  */
 
-import type { ToolDefinition } from './types';
-import type { MCPServer, MCPConfig, MCPTransport } from './plugin-api-types';
-import type { Logger } from '../infra/logger';
+import type { ToolDefinition, MCPServer, MCPConfig, MCPTransport, Logger } from './types';
 import { SseMCPClient } from './mcp-sse-client';
 import { HttpMCPClient } from './mcp-http-client';
 import { WebSocketMCPClient } from './mcp-ws-client';

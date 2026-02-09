@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
-import { WindowsServiceManager } from '../../../src/infra/service/windows';
-import type { ServiceConfig, ServiceStatus } from '../../../src/infra/service/types';
+import { WindowsServiceManager } from '../src/windows';
+import type { ServiceConfig, ServiceStatus } from '../src/types';
 
 describe('WindowsServiceManager Full Coverage', () => {
   let manager: WindowsServiceManager;

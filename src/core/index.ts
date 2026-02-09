@@ -60,6 +60,9 @@ export type {
   HookContext,
   HookResult,
   HookHandler,
+  TranscriptionProvider,
+  TranscriptionOptions,
+  TranscriptionResult,
 } from './plugin-api-types';
 
 // Provider Manager
@@ -146,14 +149,7 @@ export {
 export {
   StdioMCPClient,
   createMCPClient,
-} from './mcp-client';
-
-// Human Behavior
-export {
-  HumanBehavior,
-  createHumanBehavior,
-  type HumanBehaviorConfig,
-} from './human-behavior';
+} from '@daemux/mcp-client';
 
 // Session Persistence
 export {
@@ -207,15 +203,6 @@ export {
   createChannelManager,
   getChannelManager,
 } from './channel-manager';
-
-// Transcription
-export {
-  OpenAITranscriptionProvider,
-  createTranscriptionProvider,
-  type TranscriptionOptions,
-  type TranscriptionResult,
-  type TranscriptionProvider,
-} from './transcription';
 
 // Channel Router
 export {

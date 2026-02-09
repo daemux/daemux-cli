@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdir } from 'fs/promises';
-import { getLogger } from '../infra/logger';
+import { getLogger } from './logger';
 import type { PlatformKey, PlatformManifest } from './types';
 
 // ---------------------------------------------------------------------------

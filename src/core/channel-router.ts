@@ -8,7 +8,7 @@ import type { AgenticLoop } from './loop';
 import type { ChannelManager } from './channel-manager';
 import type { EventBus } from './event-bus';
 import type { EnhancedChannel, RichChannelMessage } from './channel-types';
-import type { TranscriptionProvider } from './transcription';
+import type { TranscriptionProvider } from './plugin-api-types';
 import type { Logger } from '../infra/logger';
 import type { Config } from './types';
 import type { Database } from '../infra/database';

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
-import { SystemdServiceManager } from '../../../src/infra/service/systemd';
+import { SystemdServiceManager } from '../src/systemd';
 
 describe('SystemdServiceManager - Real runSystemctl execution', () => {
   const testDir = join(import.meta.dir, 'test-systemd-spawn');

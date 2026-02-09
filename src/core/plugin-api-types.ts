@@ -13,6 +13,12 @@ import type {
   ToolDefinition,
 } from './types';
 
+import type {
+  MCPTransport as _MCPTransport,
+  MCPServer as _MCPServer,
+  MCPConfig as _MCPConfig,
+} from '@daemux/mcp-client';
+
 // ---------------------------------------------------------------------------
 // Channel Interface (4 methods per channel)
 // ---------------------------------------------------------------------------
@@ -56,28 +62,12 @@ export interface Channel {
 }
 
 // ---------------------------------------------------------------------------
-// MCP Interface (Model Context Protocol)
+// MCP Interface (Model Context Protocol) - re-exported from @daemux/mcp-client
 // ---------------------------------------------------------------------------
 
-export type MCPTransport = 'stdio' | 'sse' | 'http' | 'websocket';
-
-export interface MCPServer {
-  id: string;
-  transport: MCPTransport;
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  listTools(): Promise<ToolDefinition[]>;
-  callTool(name: string, input: Record<string, unknown>): Promise<unknown>;
-  listResources(): Promise<Array<{ uri: string; name: string; mimeType?: string }>>;
-  readResource(uri: string): Promise<{ content: string; mimeType?: string }>;
-}
-
-export interface MCPConfig {
-  command?: string;
-  args?: string[];
-  url?: string;
-  env?: Record<string, string>;
-}
+export type MCPTransport = _MCPTransport;
+export type MCPServer = _MCPServer;
+export type MCPConfig = _MCPConfig;
 
 // ---------------------------------------------------------------------------
 // Memory Provider Interface
@@ -227,6 +217,31 @@ export interface LLMProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Transcription Provider Interface
+// ---------------------------------------------------------------------------
+
+export interface TranscriptionOptions {
+  model?: string;
+  language?: string;
+  responseFormat?: 'text' | 'json' | 'verbose_json';
+}
+
+export interface TranscriptionResult {
+  text: string;
+  language?: string;
+  duration?: number;
+}
+
+export interface TranscriptionProvider {
+  readonly id: string;
+  transcribe(
+    audio: Buffer,
+    fileName: string,
+    options?: TranscriptionOptions,
+  ): Promise<TranscriptionResult>;
+}
+
+// ---------------------------------------------------------------------------
 // Plugin Manifest
 // ---------------------------------------------------------------------------
 
@@ -248,12 +263,13 @@ export interface PluginManifest {
 // ---------------------------------------------------------------------------
 
 export interface PluginAPI {
-  // Registration (5 methods)
+  // Registration (6 methods)
   registerChannel(channel: Channel): void;
   registerMCP(id: string, config: MCPConfig): void;
   registerAgent(agent: AgentDefinition): void;
   registerMemory(provider: MemoryProvider): void;
   registerProvider(id: string, provider: LLMProvider): void;
+  registerTranscription(provider: TranscriptionProvider): void;
 
   // Agent Operations (3 methods)
   spawnSubagent(

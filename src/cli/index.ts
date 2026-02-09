@@ -19,7 +19,8 @@ import { registerWorkCommands } from './work';
 import { setConfig, getConfig } from '../core/config';
 import { initLogger } from '../infra/logger';
 import { version as packageVersion } from '../../package.json';
-import { Updater, loadStateSync, defaultState, acquireLock, releaseLock } from '../updater';
+import { Updater, loadStateSync, defaultState, acquireLock, releaseLock, setLogger } from '@daemux/updater';
+import { getLogger } from '../infra/logger';
 import { onShutdown } from './utils';
 
 // ---------------------------------------------------------------------------
@@ -132,12 +133,13 @@ process.on('uncaughtException', (err) => {
 
 function checkForUpdatesInBackground(): void {
   try {
-    const state = defaultState();
+    setLogger(getLogger());
+    const state = defaultState(packageVersion);
     if (state.disabled) return;
 
     const stateDir = join(homedir(), '.local', 'share', 'daemux');
     const statePath = join(stateDir, 'update-state.json');
-    const persisted = loadStateSync(statePath);
+    const persisted = loadStateSync(statePath, packageVersion);
 
     // Show notification if a pending update exists
     if (persisted.pendingUpdate?.verified && persisted.availableVersion) {

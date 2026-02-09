@@ -7,9 +7,9 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { EventEmitter } from 'events';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
-import { SystemdServiceManager } from '../../../src/infra/service/systemd';
-import { WindowsServiceManager } from '../../../src/infra/service/windows';
-import type { ServiceConfig, ServiceStatus } from '../../../src/infra/service/types';
+import { SystemdServiceManager } from '../src/systemd';
+import { WindowsServiceManager } from '../src/windows';
+import type { ServiceConfig, ServiceStatus } from '../src/types';
 
 describe('Spawn Callbacks - SystemdServiceManager runSystemctl', () => {
   const testDir = join(import.meta.dir, 'test-spawn-systemd');

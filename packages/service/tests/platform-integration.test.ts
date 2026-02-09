@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import type { ServiceStatus } from '../../../src/infra/service/types';
+import type { ServiceStatus } from '../src/types';
 
 describe('Platform Integration - runSystemctl callbacks', () => {
   it('resolves with stdout on success', async () => {

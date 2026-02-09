@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { platform } from 'os';
-import { ServiceManager, getServiceManager } from '../../../src/infra/service/index';
+import { ServiceManager, getServiceManager } from '../src/index';
 
 describe('ServiceManager Index', () => {
   describe('Platform Detection', () => {

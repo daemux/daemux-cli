@@ -4,10 +4,9 @@
  */
 
 import { readFileSync } from 'fs';
-import { getLogger } from '../infra/logger';
+import { getLogger } from './logger';
 import { isUpdateState } from './utils';
 import type { UpdateState } from './types';
-import { version as CURRENT_VERSION } from '../../package.json';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -23,7 +22,7 @@ const DEFAULT_CHECK_INTERVAL_MS = 1_800_000;
  * Synchronously reads and parses update state from the given file path.
  * Returns default state if the file is missing or invalid.
  */
-export function loadStateSync(path: string): UpdateState {
+export function loadStateSync(path: string, currentVersion?: string): UpdateState {
   try {
     const content = readFileSync(path, 'utf-8');
     const parsed: unknown = JSON.parse(content);
@@ -35,7 +34,7 @@ export function loadStateSync(path: string): UpdateState {
     // State file doesn't exist or is invalid - use defaults
   }
 
-  return defaultState();
+  return defaultState(currentVersion);
 }
 
 /**
@@ -50,14 +49,14 @@ export function persistState(path: string, state: UpdateState): void {
 /**
  * Returns a fresh default UpdateState, respecting environment overrides.
  */
-export function defaultState(): UpdateState {
+export function defaultState(currentVersion?: string): UpdateState {
   const parsed = parseInt(process.env['DAEMUX_UPDATE_INTERVAL_MS'] ?? '', 10);
   const checkIntervalMs = Number.isFinite(parsed) && parsed > 0
     ? parsed
     : DEFAULT_CHECK_INTERVAL_MS;
 
   return {
-    currentVersion: CURRENT_VERSION,
+    currentVersion: currentVersion ?? '0.0.0',
     lastCheckTime: 0,
     lastCheckResult: 'up-to-date',
     checkIntervalMs,

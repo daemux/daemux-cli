@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { ServiceManager, getServiceManager } from '../src/infra/service/index';
+import { ServiceManager, getServiceManager } from '../src/index';
 import { platform } from 'os';
 
 describe('ServiceManager', () => {

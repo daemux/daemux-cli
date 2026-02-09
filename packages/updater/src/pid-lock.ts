@@ -9,14 +9,10 @@ import { mkdir, readdir, readFile, unlink } from 'fs/promises';
 import { unlinkSync } from 'fs';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants & Types
 // ---------------------------------------------------------------------------
 
 const DEFAULT_VERSIONS_DIR = join(homedir(), '.local', 'share', 'daemux', 'versions');
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface LockData {
   pid: number;
@@ -30,32 +26,55 @@ export interface LockStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getLocksDir(versionsDir?: string): string {
+  return join(versionsDir ?? DEFAULT_VERSIONS_DIR, 'locks');
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EPERM') return true;
+    return false;
+  }
+}
+
+function tryUnlink(path: string): Promise<void> {
+  return unlink(path).catch(() => {});
+}
+
+async function readLockFiles(locksDir: string): Promise<string[]> {
+  try {
+    const files = await readdir(locksDir);
+    return files.filter(f => f.endsWith('.lock'));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Acquire / Release
 // ---------------------------------------------------------------------------
 
 export async function acquireLock(version: string, versionsDir?: string): Promise<void> {
-  const dir = versionsDir ?? DEFAULT_VERSIONS_DIR;
-  const locksDir = join(dir, 'locks');
+  const locksDir = getLocksDir(versionsDir);
   await mkdir(locksDir, { recursive: true });
 
   const lockPath = join(locksDir, `${process.pid}.lock`);
-  const data: LockData = {
-    pid: process.pid,
-    version,
-    startedAt: Date.now(),
-  };
-
+  const data: LockData = { pid: process.pid, version, startedAt: Date.now() };
   await Bun.write(lockPath, JSON.stringify(data));
 }
 
 export function releaseLock(versionsDir?: string): void {
-  const dir = versionsDir ?? DEFAULT_VERSIONS_DIR;
-  const lockPath = join(dir, 'locks', `${process.pid}.lock`);
-
   try {
-    unlinkSync(lockPath);
+    unlinkSync(join(getLocksDir(versionsDir), `${process.pid}.lock`));
   } catch {
-    // Already removed or never created — safe to ignore
+    // Already removed or never created
   }
 }
 
@@ -67,20 +86,10 @@ export async function isVersionLocked(
   version: string,
   versionsDir?: string
 ): Promise<LockStatus> {
-  const dir = versionsDir ?? DEFAULT_VERSIONS_DIR;
-  const locksDir = join(dir, 'locks');
+  const locksDir = getLocksDir(versionsDir);
   const pids: number[] = [];
 
-  let files: string[];
-  try {
-    files = await readdir(locksDir);
-  } catch {
-    return { locked: false, pids: [] };
-  }
-
-  for (const file of files) {
-    if (!file.endsWith('.lock')) continue;
-
+  for (const file of await readLockFiles(locksDir)) {
     try {
       const raw = await readFile(join(locksDir, file), 'utf-8');
       const data = JSON.parse(raw) as LockData;
@@ -90,12 +99,10 @@ export async function isVersionLocked(
       if (isPidAlive(data.pid)) {
         pids.push(data.pid);
       } else {
-        // Stale lock — clean it up
-        try { await unlink(join(locksDir, file)); } catch { /* race ok */ }
+        await tryUnlink(join(locksDir, file));
       }
     } catch {
-      // Corrupted lock file — remove it
-      try { await unlink(join(locksDir, file)); } catch { /* race ok */ }
+      await tryUnlink(join(locksDir, file));
     }
   }
 
@@ -107,20 +114,10 @@ export async function isVersionLocked(
 // ---------------------------------------------------------------------------
 
 export async function cleanStaleLocks(versionsDir?: string): Promise<number> {
-  const dir = versionsDir ?? DEFAULT_VERSIONS_DIR;
-  const locksDir = join(dir, 'locks');
+  const locksDir = getLocksDir(versionsDir);
   let removed = 0;
 
-  let files: string[];
-  try {
-    files = await readdir(locksDir);
-  } catch {
-    return 0;
-  }
-
-  for (const file of files) {
-    if (!file.endsWith('.lock')) continue;
-
+  for (const file of await readLockFiles(locksDir)) {
     try {
       const raw = await readFile(join(locksDir, file), 'utf-8');
       const data = JSON.parse(raw) as LockData;
@@ -130,7 +127,6 @@ export async function cleanStaleLocks(versionsDir?: string): Promise<number> {
         removed++;
       }
     } catch {
-      // Corrupted — remove
       try {
         await unlink(join(locksDir, file));
         removed++;
@@ -139,21 +135,4 @@ export async function cleanStaleLocks(versionsDir?: string): Promise<number> {
   }
 
   return removed;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
-    // EPERM = process exists but we lack permission (conservative: alive)
-    if (code === 'EPERM') return true;
-    // ESRCH = no such process
-    return false;
-  }
 }

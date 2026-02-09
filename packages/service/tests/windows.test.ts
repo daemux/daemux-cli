@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { WindowsServiceManager } from '../../../src/infra/service/windows';
-import type { ServiceConfig } from '../../../src/infra/service/types';
+import { WindowsServiceManager } from '../src/windows';
+import type { ServiceConfig } from '../src/types';
 
 describe('WindowsServiceManager', () => {
   let manager: WindowsServiceManager;

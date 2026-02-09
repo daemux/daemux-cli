@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { WindowsServiceManager } from '../../../src/infra/service/windows';
+import { WindowsServiceManager } from '../src/windows';
 
 describe('WindowsServiceManager - Real runNssm execution', () => {
   let manager: WindowsServiceManager;

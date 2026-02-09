@@ -3,7 +3,7 @@
  * Uses Bun.CryptoHasher with SHA-256 to verify file integrity
  */
 
-import { getLogger } from '../infra/logger';
+import { getLogger } from './logger';
 
 const SHA256_HEX_REGEX = /^[a-f0-9]{64}$/i;
 

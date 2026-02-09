@@ -6,7 +6,7 @@
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdir, readdir, rm, symlink, rename, lstat, readlink } from 'fs/promises';
-import { getLogger } from '../infra/logger';
+import { getLogger } from './logger';
 import { isVersionLocked } from './pid-lock';
 
 // ---------------------------------------------------------------------------

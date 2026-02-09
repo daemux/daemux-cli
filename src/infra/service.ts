@@ -1,16 +1,16 @@
 /**
  * Cross-Platform Daemon Service Management
- * Re-exports from split modules
+ * Re-exports from @daemux/service workspace package
  */
 
 export {
   ServiceManager,
   getServiceManager,
-} from './service/index';
+} from '@daemux/service';
 
 export type {
   Platform,
   ServiceConfig,
   ServiceInfo,
   ServiceStatus,
-} from './service/types';
+} from '@daemux/service';

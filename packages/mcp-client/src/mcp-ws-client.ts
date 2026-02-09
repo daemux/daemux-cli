@@ -3,9 +3,7 @@
  * Uses a single WebSocket connection for both request and response
  */
 
-import type { ToolDefinition } from './types';
-import type { MCPServer, MCPConfig, MCPTransport } from './plugin-api-types';
-import type { Logger } from '../infra/logger';
+import type { ToolDefinition, MCPServer, MCPConfig, MCPTransport, Logger } from './types';
 import {
   JSONRPC_VERSION,
   DEFAULT_TIMEOUT_MS,

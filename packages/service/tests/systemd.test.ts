@@ -7,8 +7,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { SystemdServiceManager } from '../../../src/infra/service/systemd';
-import type { ServiceConfig } from '../../../src/infra/service/types';
+import { SystemdServiceManager } from '../src/systemd';
+import type { ServiceConfig } from '../src/types';
 
 describe('SystemdServiceManager', () => {
   const testDir = join(import.meta.dir, 'test-systemd-temp');

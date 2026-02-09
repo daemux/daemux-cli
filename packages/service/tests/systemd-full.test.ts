@@ -6,8 +6,8 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
-import { SystemdServiceManager } from '../../../src/infra/service/systemd';
-import type { ServiceConfig, ServiceStatus } from '../../../src/infra/service/types';
+import { SystemdServiceManager } from '../src/systemd';
+import type { ServiceConfig, ServiceStatus } from '../src/types';
 
 describe('SystemdServiceManager Full Coverage', () => {
   const testDir = join(import.meta.dir, 'test-systemd-full-temp');
@@ -348,7 +348,6 @@ describe('SystemdServiceManager Full Coverage', () => {
         description: 'Test Description',
         execPath: '/usr/bin/test',
         args: ['--flag', 'value'],
-        workingDir: '/var/lib/test',
         env: { KEY: 'value' },
       };
 

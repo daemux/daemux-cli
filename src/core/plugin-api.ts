@@ -19,6 +19,7 @@ import type {
   MCPConfig,
   MemoryProvider,
   LLMProvider,
+  TranscriptionProvider,
   HookEvent,
   HookHandler,
 } from './plugin-api-types';
@@ -36,6 +37,7 @@ export interface PluginAPIContext {
   agents: Map<string, AgentDefinition>;
   memoryProviders: Map<string, MemoryProvider>;
   llmProviders: Map<string, LLMProvider>;
+  transcriptionProvider: TranscriptionProvider | null;
   hooks: Map<HookEvent, HookHandler[]>;
   taskManager: {
     create(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Task;
@@ -82,6 +84,10 @@ export function createPluginAPI(context: PluginAPIContext): PluginAPI {
 
     registerProvider(id: string, provider: LLMProvider): void {
       context.llmProviders.set(id, provider);
+    },
+
+    registerTranscription(provider: TranscriptionProvider): void {
+      context.transcriptionProvider = provider;
     },
 
     // Agent Operations

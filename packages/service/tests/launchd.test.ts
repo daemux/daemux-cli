@@ -7,8 +7,8 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { LaunchdServiceManager } from '../../../src/infra/service/launchd';
-import type { ServiceConfig } from '../../../src/infra/service/types';
+import { LaunchdServiceManager } from '../src/launchd';
+import type { ServiceConfig } from '../src/types';
 
 describe('LaunchdServiceManager', () => {
   const testDir = join(import.meta.dir, 'test-launchd-temp');

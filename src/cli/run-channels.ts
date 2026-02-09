@@ -9,7 +9,7 @@ import { join } from 'path';
 import { resolveCredentials } from './credentials';
 import { createChannelManager } from '../core/channel-manager';
 import { createChannelRouter, type ChannelRouter } from '../core/channel-router';
-import { createTranscriptionProvider } from '../core/transcription';
+import type { TranscriptionProvider } from '../core/plugin-api-types';
 import type { EnhancedChannel } from '../core/channel-types';
 import type { AgenticLoop } from '../core/loop';
 import type { EventBus } from '../core/event-bus';
@@ -57,24 +57,63 @@ function loadChannelSettings(): Map<string, Record<string, unknown>> {
 }
 
 // ---------------------------------------------------------------------------
+// Plugin Loader Helper
+// ---------------------------------------------------------------------------
+
+async function importFirstFound(paths: string[]): Promise<Record<string, unknown> | null> {
+  for (const p of paths) {
+    if (existsSync(p)) return import(p);
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Telegram Adapter Loader
 // ---------------------------------------------------------------------------
 
 async function loadTelegramAdapter(logger: Logger): Promise<(new () => EnhancedChannel) | null> {
-  const paths = [
+  const mod = await importFirstFound([
     join(homedir(), '.daemux', 'plugins', 'telegram-adapter', 'dist', 'index.js'),
     join(__dirname, '..', '..', '..', 'daemux-plugins', 'channels', 'telegram-adapter', 'dist', 'index.js'),
-  ];
+  ]);
 
-  for (const p of paths) {
-    if (existsSync(p)) {
-      const mod = await import(p);
-      return mod.TelegramChannel as new () => EnhancedChannel;
-    }
+  if (!mod) {
+    logger.warn('Telegram adapter not found, skipping channel');
+    return null;
   }
 
-  logger.warn('Telegram adapter not found, skipping channel');
-  return null;
+  return mod.TelegramChannel as new () => EnhancedChannel;
+}
+
+// ---------------------------------------------------------------------------
+// Transcription Plugin Loader
+// ---------------------------------------------------------------------------
+
+async function loadTranscriptionPlugin(
+  apiKey: string,
+  logger: Logger,
+): Promise<TranscriptionProvider | undefined> {
+  const mod = await importFirstFound([
+    join(homedir(), '.daemux', 'plugins', 'transcription', 'src', 'index.ts'),
+    join(__dirname, '..', '..', '..', 'daemux-plugins', 'features', 'transcription', 'src', 'index.ts'),
+  ]);
+
+  if (!mod) {
+    logger.warn('Transcription plugin not found; voice messages will not be transcribed');
+    return undefined;
+  }
+
+  try {
+    const create = mod.createTranscriptionProvider as (opts: { apiKey: string }) => TranscriptionProvider;
+    const provider = create({ apiKey });
+    logger.info('Transcription provider configured (OpenAI via plugin)');
+    return provider;
+  } catch (err) {
+    logger.warn('Failed to load transcription plugin', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -118,11 +157,10 @@ export async function initializeChannels(
     return NO_CHANNELS;
   }
 
-  let transcriptionProvider: ReturnType<typeof createTranscriptionProvider> | undefined;
+  let transcriptionProvider: TranscriptionProvider | undefined;
   const telegramConfig = channelConfigs.get('telegram');
   if (telegramConfig?.openaiApiKey && typeof telegramConfig.openaiApiKey === 'string') {
-    transcriptionProvider = createTranscriptionProvider({ apiKey: telegramConfig.openaiApiKey });
-    logger.info('Transcription provider configured (OpenAI)');
+    transcriptionProvider = await loadTranscriptionPlugin(telegramConfig.openaiApiKey, logger);
   } else {
     logger.warn('No openaiApiKey in telegram channel config; voice transcription disabled');
   }
