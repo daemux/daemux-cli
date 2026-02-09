@@ -60,10 +60,8 @@ function loadChannelSettings(): Map<string, Record<string, unknown>> {
 // Plugin Loader Helper
 // ---------------------------------------------------------------------------
 
-async function importFirstFound(paths: string[]): Promise<Record<string, unknown> | null> {
-  for (const p of paths) {
-    if (existsSync(p)) return import(p);
-  }
+async function importPlugin(path: string): Promise<Record<string, unknown> | null> {
+  if (existsSync(path)) return import(path);
   return null;
 }
 
@@ -72,10 +70,9 @@ async function importFirstFound(paths: string[]): Promise<Record<string, unknown
 // ---------------------------------------------------------------------------
 
 async function loadTelegramAdapter(logger: Logger): Promise<(new () => EnhancedChannel) | null> {
-  const mod = await importFirstFound([
+  const mod = await importPlugin(
     join(homedir(), '.daemux', 'plugins', 'telegram-adapter', 'dist', 'index.js'),
-    join(__dirname, '..', '..', '..', 'daemux-plugins', 'channels', 'telegram-adapter', 'dist', 'index.js'),
-  ]);
+  );
 
   if (!mod) {
     logger.warn('Telegram adapter not found, skipping channel');
@@ -93,10 +90,9 @@ async function loadTranscriptionPlugin(
   apiKey: string,
   logger: Logger,
 ): Promise<TranscriptionProvider | undefined> {
-  const mod = await importFirstFound([
-    join(homedir(), '.daemux', 'plugins', 'transcription', 'src', 'index.ts'),
-    join(__dirname, '..', '..', '..', 'daemux-plugins', 'features', 'transcription', 'src', 'index.ts'),
-  ]);
+  const mod = await importPlugin(
+    join(homedir(), '.daemux', 'plugins', 'transcription', 'dist', 'index.js'),
+  );
 
   if (!mod) {
     logger.warn('Transcription plugin not found; voice messages will not be transcribed');

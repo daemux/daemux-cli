@@ -222,13 +222,12 @@ export class AgenticLoop {
     state.allToolCalls.push(...toolResults);
 
     if (state.loopConfig.onStream) {
-      for (const r of toolResults) {
-        const tu = toolUses.find(t => t.name === r.name);
-        if (tu) {
-          state.loopConfig.onStream({
-            type: 'tool_result', toolUseId: tu.id, result: r.result, isError: r.isError,
-          });
-        }
+      for (let i = 0; i < toolResults.length; i++) {
+        const r = toolResults[i]!;
+        const tu = toolUses[i]!;
+        state.loopConfig.onStream({
+          type: 'tool_result', toolUseId: tu.id, result: r.result, isError: r.isError,
+        });
       }
     }
 

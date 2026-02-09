@@ -12,6 +12,8 @@ import type {
   MemoryEntry,
 } from './types';
 
+import { ToolDefinitionSchema } from './types';
+
 import type {
   PluginAPI,
   Channel,
@@ -22,7 +24,13 @@ import type {
   TranscriptionProvider,
   HookEvent,
   HookHandler,
+  ToolRegistration,
 } from './plugin-api-types';
+
+import { BUILTIN_TOOLS, registerToolExecutor } from './loop/tools';
+
+// Built-in tools that plugins are not allowed to override
+const PROTECTED_TOOLS = new Set(['Read', 'Write', 'Bash', 'Edit', 'Glob', 'Grep']);
 
 // Re-export types
 export * from './plugin-api-types';
@@ -39,6 +47,10 @@ export interface PluginAPIContext {
   llmProviders: Map<string, LLMProvider>;
   transcriptionProvider: TranscriptionProvider | null;
   hooks: Map<HookEvent, HookHandler[]>;
+  /** Set of tool names registered as server tools (pass-through to LLM provider) */
+  serverTools: Set<string>;
+  /** The active LLM provider, if available. May be null during early plugin loading. */
+  provider: LLMProvider | null;
   taskManager: {
     create(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Task;
     update(id: string, updates: Partial<Task>): Task;
@@ -88,6 +100,43 @@ export function createPluginAPI(context: PluginAPIContext): PluginAPI {
 
     registerTranscription(provider: TranscriptionProvider): void {
       context.transcriptionProvider = provider;
+    },
+
+    registerTool(registration: ToolRegistration): void {
+      const { definition, execute, serverTool } = registration;
+
+      // Validate tool definition schema before proceeding
+      ToolDefinitionSchema.parse(definition);
+
+      const { name } = definition;
+
+      // Prevent plugins from overriding built-in tools
+      if (PROTECTED_TOOLS.has(name)) {
+        context.logger.log('warn', `Plugin attempted to override built-in tool: ${name}`);
+        return;
+      }
+
+      const existing = BUILTIN_TOOLS.findIndex(t => t.name === name);
+      if (existing !== -1) {
+        BUILTIN_TOOLS[existing] = definition;
+      } else {
+        BUILTIN_TOOLS.push(definition);
+      }
+
+      registerToolExecutor(name, execute);
+
+      if (serverTool) {
+        context.serverTools.add(name);
+      }
+
+      context.logger.log('info', `Plugin tool registered: ${name}`, {
+        serverTool: !!serverTool,
+      });
+    },
+
+    // Provider Access
+    getProvider(): LLMProvider | null {
+      return context.provider;
     },
 
     // Agent Operations

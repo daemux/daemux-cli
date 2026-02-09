@@ -33,10 +33,13 @@ describe('Built-in Tools', () => {
 
   describe('Tool Definitions', () => {
     it('should export correct tool definitions', () => {
-      expect(BUILTIN_TOOLS).toHaveLength(3);
+      expect(BUILTIN_TOOLS).toHaveLength(6);
       expect(BUILTIN_TOOLS.map(t => t.name)).toContain('Read');
       expect(BUILTIN_TOOLS.map(t => t.name)).toContain('Write');
       expect(BUILTIN_TOOLS.map(t => t.name)).toContain('Bash');
+      expect(BUILTIN_TOOLS.map(t => t.name)).toContain('Edit');
+      expect(BUILTIN_TOOLS.map(t => t.name)).toContain('Glob');
+      expect(BUILTIN_TOOLS.map(t => t.name)).toContain('Grep');
     });
 
     it('Read tool should have correct schema', () => {

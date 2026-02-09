@@ -323,10 +323,10 @@ describe('ToolExecutor', () => {
       expect(blocks[0]?.content).toContain('No result');
     });
 
-    it('should match by tool name', () => {
+    it('should match records to tool uses by position', () => {
       const records = [
-        { name: 'Bash', input: {}, result: 'bash result', isError: false, durationMs: 10 },
         { name: 'Read', input: {}, result: 'read result', isError: false, durationMs: 5 },
+        { name: 'Bash', input: {}, result: 'bash result', isError: false, durationMs: 10 },
       ];
       const toolUses = [
         { type: 'tool_use' as const, id: 'tool-1', name: 'Read', input: {} },

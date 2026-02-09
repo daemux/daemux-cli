@@ -99,6 +99,9 @@ const discoverPlugins = (): InstalledPlugin[] => {
   return [...userPlugins, ...projectPlugins].sort((a, b) => a.name.localeCompare(b.name));
 };
 
+/** Strip npm scope prefix (e.g. "@daemux/foo" -> "foo") for filesystem paths. */
+const stripScope = (name: string) => name.replace(/^@[^/]+\//, '');
+
 const isLocalPath = (path: string) =>
   path.startsWith('/') || path.startsWith('./') || path.startsWith('../') || existsSync(path);
 
@@ -167,7 +170,7 @@ async function installFromLocal(sourcePath: string, targetDir: string, spinner: 
   const manifest = loadPluginManifest(absPath);
   if (!manifest) throw new Error(`Not a valid plugin: missing ${PLUGIN_MANIFEST}`);
 
-  const destPath = join(targetDir, manifest.name);
+  const destPath = join(targetDir, stripScope(manifest.name));
   if (existsSync(destPath)) throw new Error(`Plugin ${manifest.name} is already installed`);
 
   spinner.update(`Copying ${manifest.name}`);
@@ -189,11 +192,11 @@ async function installFromNpm(packageName: string, targetDir: string, spinner: S
     const result = spawnSync('bun', ['add', packageName], { cwd: tempDir, stdio: 'pipe' });
     if (result.status !== 0) throw new Error(`npm install failed: ${result.stderr?.toString() || 'Unknown error'}`);
 
-    const nodeModulesPath = join(tempDir, 'node_modules', packageName.split('/').pop() ?? packageName);
+    const nodeModulesPath = join(tempDir, 'node_modules', packageName);
     const manifest = loadPluginManifest(nodeModulesPath);
     if (!manifest) throw new Error(`Package ${packageName} is not a valid daemux plugin`);
 
-    const destPath = join(targetDir, manifest.name);
+    const destPath = join(targetDir, stripScope(manifest.name));
     if (existsSync(destPath)) throw new Error(`Plugin ${manifest.name} is already installed`);
 
     cpSync(nodeModulesPath, destPath, { recursive: true });
@@ -329,10 +332,9 @@ async function initProvidersFromPlugins(): Promise<void> {
   // Load providers from plugin instances
   for (const plugin of plugins) {
     if (plugin.instance?.activate) {
-      // Create a minimal API for provider registration
+      // Minimal stub API -- only registerProvider does real work
       const providerManager = getProviderManager();
-      // Create a minimal API that only supports provider registration
-      // We use unknown cast because we only need registerProvider to work
+      const notAvailable = () => { throw new Error('Not available in CLI context'); };
       const minimalApi = {
         registerProvider: (_id: string, provider: unknown) => {
           providerManager.registerProvider(provider as import('../core/plugin-api-types').LLMProvider);
@@ -341,15 +343,18 @@ async function initProvidersFromPlugins(): Promise<void> {
         registerMCP: () => {},
         registerAgent: () => {},
         registerMemory: () => {},
-        spawnSubagent: async () => { throw new Error('Not available in CLI context'); },
+        registerTranscription: () => {},
+        registerTool: () => {},
+        getProvider: () => null,
+        spawnSubagent: async () => notAvailable(),
         listAgents: () => [],
         getAgent: () => undefined,
-        createTask: async () => { throw new Error('Not available in CLI context'); },
-        updateTask: async () => { throw new Error('Not available in CLI context'); },
+        createTask: async () => notAvailable(),
+        updateTask: async () => notAvailable(),
         listTasks: async () => [],
         getTask: async () => null,
         on: () => {},
-        sendMessage: async () => { throw new Error('Not available in CLI context'); },
+        sendMessage: async () => notAvailable(),
         searchMemory: async () => [],
         getState: async () => undefined,
         setState: async () => {},
@@ -385,7 +390,7 @@ async function listProviders(options: { json?: boolean }): Promise<void> {
   if (providers.length === 0) {
     console.log(dim('\nNo LLM providers available.\n'));
     console.log('Install a provider plugin:');
-    console.log(dim('  daemux plugins install daemux-anthropic-provider'));
+    console.log(dim('  daemux plugins install @daemux/anthropic-provider'));
     return;
   }
 

@@ -11,6 +11,7 @@ import type {
   LogLevel,
   MemoryEntry,
   ToolDefinition,
+  ToolResult,
 } from './types';
 
 import type {
@@ -242,6 +243,17 @@ export interface TranscriptionProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Tool Registration (for plugin-registered tools)
+// ---------------------------------------------------------------------------
+
+export interface ToolRegistration {
+  definition: ToolDefinition;
+  execute: (toolUseId: string, input: Record<string, unknown>) => Promise<ToolResult>;
+  /** If true, the tool is a server-side tool passed through to the LLM provider (e.g. Anthropic web_search) */
+  serverTool?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Plugin Manifest
 // ---------------------------------------------------------------------------
 
@@ -263,13 +275,17 @@ export interface PluginManifest {
 // ---------------------------------------------------------------------------
 
 export interface PluginAPI {
-  // Registration (6 methods)
+  // Registration (7 methods)
   registerChannel(channel: Channel): void;
   registerMCP(id: string, config: MCPConfig): void;
   registerAgent(agent: AgentDefinition): void;
   registerMemory(provider: MemoryProvider): void;
   registerProvider(id: string, provider: LLMProvider): void;
   registerTranscription(provider: TranscriptionProvider): void;
+  registerTool(registration: ToolRegistration): void;
+
+  // Provider Access (1 method)
+  getProvider(): LLMProvider | null;
 
   // Agent Operations (3 methods)
   spawnSubagent(

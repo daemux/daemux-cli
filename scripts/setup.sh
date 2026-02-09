@@ -93,7 +93,7 @@ fi
 # ---------------------------------------------------------------------------
 
 PLUGINS_DIR="$DAEMUX_HOME/plugins"
-DEFAULT_PLUGINS=("daemux-anthropic-provider")
+DEFAULT_PLUGINS=("@daemux/anthropic-provider")
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -101,7 +101,7 @@ BUNDLED_PLUGINS_DIR="$(dirname "$SCRIPT_DIR")/plugins"
 
 install_default_plugins() {
     for plugin in "${DEFAULT_PLUGINS[@]}"; do
-        local plugin_target="$PLUGINS_DIR/$plugin"
+        local plugin_target="$PLUGINS_DIR/${plugin##*/}"
 
         # Skip if already installed
         if [ -d "$plugin_target" ] && [ -f "$plugin_target/.claude-plugin/plugin.json" ]; then
@@ -110,7 +110,7 @@ install_default_plugins() {
         fi
 
         # Check for bundled plugin first
-        local bundled_plugin="$BUNDLED_PLUGINS_DIR/$plugin"
+        local bundled_plugin="$BUNDLED_PLUGINS_DIR/${plugin##*/}"
         if [ -d "$bundled_plugin" ] && [ -f "$bundled_plugin/.claude-plugin/plugin.json" ]; then
             print_info "Installing bundled plugin: $plugin"
             cp -r "$bundled_plugin" "$plugin_target"

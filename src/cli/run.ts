@@ -22,6 +22,8 @@ import { Database } from '../infra/database';
 import { createEventBus } from '../core/event-bus';
 import { AgenticLoop, createAgenticLoop, BUILTIN_TOOLS } from '../core/loop';
 import type { LoopConfig } from '../core/loop';
+import { createAgentRegistry } from '../core/agent-registry';
+import { loadBuiltinAgents } from '../core/agent-loader';
 import { initLogger } from '../infra/logger';
 import { createStreamHandler, printStats } from './run-output';
 import { initializeChannels } from './run-channels';
@@ -253,6 +255,12 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
 
   const eventBus = createEventBus();
   const loop = createAgenticLoop({ db, eventBus, config, provider });
+
+  // Initialize agent registry and load built-in agents (before plugin activation)
+  const agentRegistry = createAgentRegistry({ db, eventBus, config });
+  agentRegistry.setProvider(provider);
+  const builtinAgents = loadBuiltinAgents();
+  agentRegistry.loadAgents(builtinAgents);
 
   // Initialize MCP servers and bridge their tools into the agentic loop
   const { tools: mcpTools, executors: mcpExecutors, cleanup: mcpCleanup } = await initMCP(logger);

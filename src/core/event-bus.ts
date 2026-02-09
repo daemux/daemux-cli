@@ -24,6 +24,11 @@ export interface EventMap {
   'subagent:spawn': { record: SubagentRecord };
   'subagent:complete': { record: SubagentRecord };
   'subagent:timeout': { record: SubagentRecord };
+  'subagent:stream': {
+    subagentId: string;
+    chunk: string;
+    type: 'text_delta' | 'tool_use' | 'tool_result';
+  };
 
   // Task events
   'task:created': { task: Task };

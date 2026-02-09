@@ -118,6 +118,64 @@ daemux plugins install <path>       # Install plugin
 daemux plugins uninstall <name>     # Remove plugin
 ```
 
+### MCP Servers
+
+Daemux supports the same MCP (Model Context Protocol) format as Claude Code.
+
+#### Configure via CLI
+```bash
+daemux mcp add <name> --command <cmd> --args <args>   # Add stdio MCP server
+daemux mcp add <name> --url <url> --type http          # Add HTTP MCP server
+daemux mcp remove <name>                               # Remove MCP server
+daemux mcp list                                        # List configured servers
+daemux mcp get <name>                                  # Show server details
+```
+
+#### Configure via `.mcp.json`
+
+Create `.mcp.json` in your project root (Claude Code-compatible format):
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "node",
+      "args": ["server.js"],
+      "env": { "API_KEY": "${API_KEY}" }
+    }
+  }
+}
+```
+
+Supports `${VAR}` and `${VAR:-default}` environment variable expansion.
+
+#### Install MCP as a Plugin
+
+MCP servers can be packaged as daemux plugins:
+
+```bash
+# From local path
+daemux plugins install ./path/to/mcp-plugin
+
+# From npm
+daemux plugins install @daemux/my-mcp-server
+
+# Global install
+daemux plugins install @daemux/my-mcp-server --global
+```
+
+Plugin MCP servers are auto-discovered from the plugin's `.mcp.json` on activation.
+
+#### Configuration Locations
+
+| Scope | Location |
+|-------|----------|
+| User | `~/.daemux/settings.json` → `mcpServers` key |
+| Project | `./.mcp.json` in project root |
+| Plugin | `.mcp.json` inside plugin directory |
+
+Project configs override user settings. Plugin MCPs are registered during plugin activation.
+
 ### Service Management
 ```bash
 daemux service install      # Install as system service

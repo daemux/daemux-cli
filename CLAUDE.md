@@ -56,3 +56,37 @@ Follow semver: `vMAJOR.MINOR.PATCH`
 - Patch: bug fixes
 - Minor: new features, backward compatible
 - Major: breaking changes
+
+## Plugin System
+
+### Installing Plugins
+
+```bash
+daemux plugins install @daemux/<name> --global   # from npm
+daemux plugins install ./path/to/plugin --global  # from local
+```
+
+Plugins install to `~/.daemux/plugins/<flat-name>/` (scoped prefix stripped: `@daemux/anthropic-provider` → `anthropic-provider/`).
+
+### Plugin Loading
+
+All plugin loading uses `~/.daemux/plugins/` exclusively. No hardcoded sibling-repo paths — plugins must be installed via `daemux plugins install` or the setup script.
+
+### Cross-Repo Plugin Development
+
+1. Build in `daemux-plugins`: `npm run build`
+2. Install from local path: `daemux plugins install ../daemux-plugins/llm-providers/anthropic-provider --global`
+
+### Available Plugins (from daemux-plugins repo)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@daemux/plugin-sdk` | 0.5.0 | Shared types and helpers for plugin authors |
+| `@daemux/anthropic-provider` | 1.1.0 | Anthropic Claude LLM provider |
+| `@daemux/telegram-adapter` | 1.0.0 | Telegram Bot API channel adapter |
+| `@daemux/human-behavior` | 0.4.0 | Human-like response behavior simulation |
+| `@daemux/transcription` | 0.4.0 | OpenAI audio transcription for voice messages |
+
+### Important
+
+New plugins and MCP servers belong in the `daemux-plugins` repo, not here. This repo only consumes them via `daemux plugins install`.

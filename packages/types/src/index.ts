@@ -106,6 +106,7 @@ export const ToolDefinitionSchema = z.object({
     properties: z.record(z.unknown()),
     required: z.array(z.string()).optional(),
   }),
+  isConcurrencySafe: z.boolean().optional(),
 });
 
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;

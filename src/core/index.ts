@@ -63,6 +63,7 @@ export type {
   TranscriptionProvider,
   TranscriptionOptions,
   TranscriptionResult,
+  ToolRegistration,
 } from './plugin-api-types';
 
 // Provider Manager
@@ -92,7 +93,16 @@ export {
   AgentRegistry,
   createAgentRegistry,
   getAgentRegistry,
+  MAX_SUBAGENT_DEPTH,
+  DEFAULT_SUBAGENT_TIMEOUT_MS,
 } from './agent-registry';
+export type { SpawnSubagentOptions, LoopFactory, LoopRunConfig, LoopRunResult } from './agent-registry';
+
+// Agent Loader
+export {
+  loadBuiltinAgents,
+  parseFrontmatter,
+} from './agent-loader';
 
 // Task Manager
 export {
