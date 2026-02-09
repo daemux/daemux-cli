@@ -2,8 +2,7 @@
  * Linux (systemd) Service Manager Implementation
  */
 
-import { mkdir, readFile, unlink } from 'fs/promises';
-import { writeFile } from 'fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawn } from 'child_process';
@@ -26,11 +25,12 @@ export class SystemdServiceManager implements PlatformServiceManager {
   async install(config: ServiceConfig): Promise<void> {
     await mkdir(this.userDir, { recursive: true });
 
-    const envLines = config.env
-      ? Object.entries(config.env)
-          .map(([k, v]) => `Environment="${k}=${v}"`)
-          .join('\n')
-      : '';
+    const hardenedEnv = this.buildHardenedEnv(config.env);
+    const envLines = Object.entries(hardenedEnv)
+      .map(([k, v]) => `Environment="${k}=${v}"`)
+      .join('\n');
+
+    const logLines = this.buildLogDirectives(config);
 
     const unitContent = `[Unit]
 Description=${config.description ?? config.displayName ?? config.name}
@@ -43,7 +43,7 @@ WorkingDirectory=${config.workingDirectory ?? homedir()}
 Restart=on-failure
 RestartSec=5
 ${envLines}
-
+${logLines}
 [Install]
 WantedBy=default.target
 `;
@@ -53,6 +53,13 @@ WantedBy=default.target
 
     await this.runSystemctl(['daemon-reload']);
     await this.runSystemctl(['enable', config.name]);
+
+    const lingerResult = await this.enableLinger();
+    if (lingerResult) {
+      this.logger.info('User lingering enabled for service persistence');
+    } else {
+      this.logger.warn('Could not enable user lingering. Service may stop when SSH session disconnects.');
+    }
 
     this.logger.info('Service installed', { name: config.name, path: unitPath });
   }
@@ -121,7 +128,9 @@ WantedBy=default.target
         return { name, status: 'not-installed' };
       }
 
-      return { name, status, pid };
+      const lingerEnabled = await this.isLingerEnabled();
+
+      return { name, status, pid, lingerEnabled };
     } catch {
       return { name, status: 'not-installed' };
     }
@@ -137,9 +146,58 @@ WantedBy=default.target
     }
   }
 
-  private runSystemctl(args: string[]): Promise<string> {
+  private buildHardenedEnv(env?: Record<string, string>): Record<string, string> {
+    const result = { ...env };
+    const home = homedir();
+    const requiredPaths = [`${home}/.local/bin`, `${home}/.bun/bin`];
+    const existingPath = result.PATH ?? '';
+    const pathParts = existingPath.split(':').filter(Boolean);
+
+    for (const rp of requiredPaths) {
+      if (!pathParts.includes(rp)) {
+        pathParts.unshift(rp);
+      }
+    }
+
+    result.PATH = pathParts.join(':');
+    return result;
+  }
+
+  private buildLogDirectives(config: ServiceConfig): string {
+    const lines: string[] = [];
+    if (config.logPath) {
+      lines.push(`StandardOutput=append:${config.logPath}`);
+    }
+    if (config.errorLogPath) {
+      lines.push(`StandardError=append:${config.errorLogPath}`);
+    }
+    return lines.length > 0 ? lines.join('\n') + '\n' : '';
+  }
+
+  private async enableLinger(): Promise<boolean> {
+    try {
+      await this.runCommand('loginctl', ['enable-linger']);
+      return true;
+    } catch {
+      this.logger.warn('loginctl enable-linger failed; service may not persist after logout');
+      return false;
+    }
+  }
+
+  async isLingerEnabled(): Promise<boolean> {
+    try {
+      const user = process.env.USER ?? process.env.LOGNAME ?? '';
+      if (!user) return false;
+      const output = await this.runCommand('loginctl', ['show-user', user, '--property=Linger']);
+      return output.trim() === 'Linger=yes';
+    } catch {
+      return false;
+    }
+  }
+
+  private runCommand(command: string, args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
-      const proc = spawn('systemctl', ['--user', ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
 
@@ -150,9 +208,17 @@ WantedBy=default.target
         if (code === 0) {
           resolve(stdout);
         } else {
-          reject(new Error(`systemctl failed: ${stderr || stdout}`));
+          reject(new Error(`${command} failed: ${stderr || stdout}`));
         }
       });
+
+      proc.on('error', err => {
+        reject(err);
+      });
     });
+  }
+
+  private runSystemctl(args: string[]): Promise<string> {
+    return this.runCommand('systemctl', ['--user', ...args]);
   }
 }

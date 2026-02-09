@@ -3,7 +3,7 @@
  * Tests edge cases in runSystemctl and error handling
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { SystemdServiceManager } from '../src/systemd';
@@ -232,7 +232,10 @@ describe('SystemdServiceManager Full Coverage', () => {
       const unitPath = join(testUserDir, 'test-special-env.service');
       const content = readFileSync(unitPath, 'utf-8');
 
-      expect(content).toContain('Environment="PATH=/usr/bin:/usr/local/bin"');
+      // PATH is hardened: ~/.bun/bin and ~/.local/bin are prepended
+      expect(content).toContain('/usr/bin:/usr/local/bin');
+      expect(content).toContain('.local/bin');
+      expect(content).toContain('.bun/bin');
     });
   });
 

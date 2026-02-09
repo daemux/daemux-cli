@@ -29,6 +29,7 @@ export interface ServiceInfo {
   memory?: number;
   cpu?: number;
   lastError?: string;
+  lingerEnabled?: boolean;
 }
 
 export interface PlatformServiceManager {

@@ -139,7 +139,13 @@ describe('SystemdServiceManager', () => {
       const unitPath = join(testUserDir, 'test-no-env.service');
       const content = readFileSync(unitPath, 'utf-8');
 
-      expect(content).not.toContain('Environment=');
+      // Even without env, buildHardenedEnv adds PATH with ~/.local/bin and ~/.bun/bin
+      expect(content).toContain('Environment="PATH=');
+      expect(content).toContain('.local/bin');
+      expect(content).toContain('.bun/bin');
+      // Should not contain any other Environment lines besides PATH
+      const envMatches = content.match(/Environment="/g);
+      expect(envMatches?.length).toBe(1);
     });
 
     it('should handle config without args', async () => {

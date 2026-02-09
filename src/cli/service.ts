@@ -5,7 +5,7 @@
 
 import { Command } from 'commander';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { spawnSync, spawn } from 'child_process';
 import {
@@ -73,6 +73,17 @@ function formatUptime(seconds?: number): string {
   return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
 }
 
+const LINGER_WARNING =
+  'User lingering is not enabled. The service may stop when you disconnect SSH.'
+  + ' Run \'loginctl enable-linger\' to fix this.';
+
+function warnIfLingerDisabled(info: ServiceInfo): void {
+  if (process.platform !== 'linux') return;
+  if (info.lingerEnabled === false) {
+    printWarning(LINGER_WARNING);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Install Command
 // ---------------------------------------------------------------------------
@@ -112,6 +123,16 @@ async function installService(options: { force?: boolean }): Promise<void> {
     spinner.succeed('Service installed successfully');
     printInfo(`Platform: ${manager.getPlatform()}`);
     printInfo(`Log directory: ${logDir}`);
+
+    if (process.platform === 'linux') {
+      const info = await manager.status(SERVICE_NAME);
+      if (info.lingerEnabled) {
+        printInfo('User lingering: enabled (service will persist after logout)');
+      } else {
+        printWarning(LINGER_WARNING);
+      }
+    }
+
     console.log(dim('\nTo start the service, run: daemux service start'));
   } catch (err) {
     spinner.fail('Failed to install service');
@@ -180,6 +201,7 @@ async function startService(): Promise<void> {
     if (newInfo.status === 'running') {
       spinner.succeed('Service started successfully');
       if (newInfo.pid) printInfo(`PID: ${newInfo.pid}`);
+      warnIfLingerDisabled(newInfo);
     } else {
       spinner.warn('Service may have started but status is unclear');
     }
@@ -267,6 +289,9 @@ function displayServiceInfo(info: ServiceInfo, platform: string): void {
   if (info.uptime !== undefined) console.log(`Uptime:    ${formatUptime(info.uptime)}`);
   if (info.memory !== undefined) console.log(`Memory:    ${(info.memory / 1024 / 1024).toFixed(1)} MB`);
   if (info.cpu !== undefined) console.log(`CPU:       ${info.cpu.toFixed(1)}%`);
+  if (info.lingerEnabled !== undefined) {
+    console.log(`Linger:    ${info.lingerEnabled ? success('enabled') : warning('disabled')}`);
+  }
   if (info.lastError) console.log(`Last Error: ${error(info.lastError)}`);
 
   const logDir = getLogDir();
