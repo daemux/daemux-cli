@@ -4,7 +4,7 @@
 
 import type { Database as BunSQLite, SQLQueryBindings } from 'bun:sqlite';
 import { randomUUID } from 'crypto';
-import type { SubagentRecord } from '../../core/types';
+import type { SubagentRecord } from '@daemux/types';
 import type { SubagentRow } from './types';
 
 type SQLBindings = SQLQueryBindings[];

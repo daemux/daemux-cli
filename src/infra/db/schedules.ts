@@ -4,7 +4,7 @@
 
 import type { Database as BunSQLite, SQLQueryBindings } from 'bun:sqlite';
 import { randomUUID } from 'crypto';
-import type { Schedule } from '../../core/types';
+import type { Schedule } from '@daemux/types';
 import type { ScheduleRow } from './types';
 
 type SQLBindings = SQLQueryBindings[];

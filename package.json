@@ -1,6 +1,6 @@
 {
   "name": "daemux",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Universal Autonomous Agent Platform",
   "type": "module",
   "workspaces": ["packages/*"],
@@ -23,6 +23,7 @@
     "@anthropic-ai/sdk": "^0.73.0",
     "@daemux/mcp-client": "workspace:*",
     "@daemux/service": "workspace:*",
+    "@daemux/types": "workspace:*",
     "@daemux/updater": "workspace:*",
     "commander": "^14.0.0",
     "sqlite-vec": "^0.1.6",

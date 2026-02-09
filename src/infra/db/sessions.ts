@@ -4,7 +4,7 @@
 
 import type { Database as BunSQLite, SQLQueryBindings } from 'bun:sqlite';
 import { randomUUID } from 'crypto';
-import type { Session } from '../../core/types';
+import type { Session } from '@daemux/types';
 import type { SessionRow } from './types';
 
 type SQLBindings = SQLQueryBindings[];

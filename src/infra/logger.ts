@@ -6,7 +6,7 @@
 import { mkdir, readdir, unlink, symlink, lstat, rm } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { LogLevel } from '../core/types';
+import type { LogLevel } from '@daemux/types';
 
 // ---------------------------------------------------------------------------
 // Logger Configuration

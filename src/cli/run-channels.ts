@@ -14,7 +14,7 @@ import type { EnhancedChannel } from '../core/channel-types';
 import type { AgenticLoop } from '../core/loop';
 import type { EventBus } from '../core/event-bus';
 import type { Logger } from '../infra/logger';
-import type { Config } from '../core/types';
+import type { Config } from '@daemux/types';
 import type { Database } from '../infra/database';
 import type { LLMProvider } from '../core/plugin-api-types';
 

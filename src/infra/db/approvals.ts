@@ -4,7 +4,7 @@
 
 import type { Database as BunSQLite, SQLQueryBindings } from 'bun:sqlite';
 import { randomUUID } from 'crypto';
-import type { ApprovalRequest } from '../../core/types';
+import type { ApprovalRequest } from '@daemux/types';
 import type { ApprovalRow } from './types';
 
 type SQLBindings = SQLQueryBindings[];

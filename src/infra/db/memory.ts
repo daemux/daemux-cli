@@ -4,7 +4,7 @@
 
 import type { Database as BunSQLite } from 'bun:sqlite';
 import { randomUUID } from 'crypto';
-import type { MemoryEntry } from '../../core/types';
+import type { MemoryEntry } from '@daemux/types';
 import type { MemoryRow } from './types';
 
 export function createMemoryRepository(db: BunSQLite, vecEnabled: boolean) {

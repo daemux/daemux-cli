@@ -3,7 +3,7 @@
  */
 
 import type { Database as BunSQLite, SQLQueryBindings } from 'bun:sqlite';
-import type { AuditEntry } from '../../core/types';
+import type { AuditEntry } from '@daemux/types';
 import type { AuditRow } from './types';
 
 type SQLBindings = SQLQueryBindings[];

@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { QueueMode, QueuedMessage } from '../core/types';
+import type { QueueMode, QueuedMessage } from '@daemux/types';
 import { getLogger } from './logger';
 
 // ---------------------------------------------------------------------------

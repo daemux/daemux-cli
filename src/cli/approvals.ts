@@ -19,7 +19,7 @@ import {
   printInfo,
   printTable,
 } from './utils';
-import type { ApprovalDecision } from '../core/types';
+import type { ApprovalDecision } from '@daemux/types';
 import type { ApprovalRow } from '../infra/db/types';
 
 // ---------------------------------------------------------------------------
