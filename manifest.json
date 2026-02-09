@@ -1,37 +1,37 @@
 {
-  "version": "0.5.3",
-  "released": "2026-02-09T11:50:03Z",
+  "version": "0.6.0",
+  "released": "2026-02-09T15:38:14Z",
   "minBunVersion": "1.3.0",
   "platforms": {
     "darwin-arm64": {
-      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.5.3/daemux-0.5.3-darwin-arm64.tar.gz",
-      "sha256": "07c8fa78208f1bdb703225e8792510fecd99987b510e92d2b678ec1e64664760",
-      "size": 262555917
+      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.6.0/daemux-0.6.0-darwin-arm64.tar.gz",
+      "sha256": "a634f8fd90d2dba9b5a8a852348b550583c1e0acb5bb13a557850e086724371e",
+      "size": 262687862
     },
     "darwin-x64": {
-      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.5.3/daemux-0.5.3-darwin-x64.tar.gz",
-      "sha256": "a8ff5ca85ccb876ab8f47dd5fc21998c038b2e72f6da6d2aaa90dd17fd39788d",
-      "size": 264830450
+      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.6.0/daemux-0.6.0-darwin-x64.tar.gz",
+      "sha256": "355293ab8edcfb5fb3924ce6cb06c3f9bfd2f81fc731b4a4f0adca36675a65d4",
+      "size": 264961309
     },
     "linux-arm64": {
-      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.5.3/daemux-0.5.3-linux-arm64.tar.gz",
-      "sha256": "b82587022ca1641f970556b56e10d2095ef7cc92f06af1f4eace5331486d7a73",
-      "size": 278852854
+      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.6.0/daemux-0.6.0-linux-arm64.tar.gz",
+      "sha256": "f38c19ba780acf1e16a945456cc25effc75738fc136d8a8146112ad04c4fdce5",
+      "size": 278988701
     },
     "linux-x64": {
-      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.5.3/daemux-0.5.3-linux-x64.tar.gz",
-      "sha256": "8dacffbc852fc4f6ddda060a32ce1c98012a3eb5806e50958e3b1d8efb7553ef",
-      "size": 279197360
+      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.6.0/daemux-0.6.0-linux-x64.tar.gz",
+      "sha256": "a7bd97207a189a460040a2bd12581098e03b1223d1418d9bd2ebc3fc01366bfa",
+      "size": 279335205
     },
     "linux-arm64-musl": {
-      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.5.3/daemux-0.5.3-linux-arm64-musl.tar.gz",
-      "sha256": "d8cf8730f2abc1eeee9fcb94b2350d3d54b3f14bd9f833bc3044a42b1addc30b",
-      "size": 278852856
+      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.6.0/daemux-0.6.0-linux-arm64-musl.tar.gz",
+      "sha256": "3307502d4137d7c1debe94bc490c3130bb23afd0595e669477e7b110c301c5fb",
+      "size": 278988703
     },
     "linux-x64-musl": {
-      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.5.3/daemux-0.5.3-linux-x64-musl.tar.gz",
-      "sha256": "189c4db80536c56e4c712112c0b9c1a49075291bfc2b75829625ca3693e11de3",
-      "size": 279197403
+      "url": "https://github.com/daemux/daemux-cli/releases/download/v0.6.0/daemux-0.6.0-linux-x64-musl.tar.gz",
+      "sha256": "38775f339137d2f98fac0c7fefd50405f0d19cda9198883eb26b1e734c0965c5",
+      "size": 279335211
     }
   }
 }
