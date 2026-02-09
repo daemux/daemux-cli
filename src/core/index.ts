@@ -96,7 +96,7 @@ export {
   MAX_SUBAGENT_DEPTH,
   DEFAULT_SUBAGENT_TIMEOUT_MS,
 } from './agent-registry';
-export type { SpawnSubagentOptions, LoopFactory, LoopRunConfig, LoopRunResult } from './agent-registry';
+export type { SpawnSubagentOptions, LoopFactory, LoopRunConfig, LoopRunResult, StreamChunkType } from './agent-registry';
 
 // Agent Loader
 export {
@@ -225,7 +225,20 @@ export {
 // Chat Session
 export {
   ChatSession,
+  type SwarmDeps,
 } from './chat-session';
+
+// Swarm
+export {
+  SwarmCoordinator,
+  SwarmMessageBus,
+  SwarmAgentInstance,
+  type SwarmConfig,
+  type SwarmState,
+  type SwarmAgent,
+  type SwarmMessage,
+  type SwarmResult,
+} from './swarm';
 
 // Background Task Runner
 export {
@@ -239,7 +252,14 @@ export {
 export {
   DIALOG_TOOLS,
   createDialogToolExecutors,
+  type CreateAgentDeps,
 } from './dialog-tools';
+
+// Agent Factory
+export { AgentFactory, type AgentFactoryDeps, type CreateAgentOptions } from './agent-factory';
+
+// Complexity Classifier
+export { ComplexityClassifier, type ClassifierDeps, type TaskComplexity } from './complexity-classifier';
 
 // Task Verifier
 export {

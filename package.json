@@ -1,9 +1,11 @@
 {
   "name": "daemux",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "Universal Autonomous Agent Platform",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "dist/index.js",
   "bin": {
     "daemux": "./src/cli/index.ts"
@@ -13,6 +15,7 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target bun && bun build ./src/cli/index.ts --outdir ./dist/cli --target bun",
     "dev": "bun run --watch src/cli/index.ts",
     "test": "bun test",
+    "test:coverage": "bun test --coverage",
     "lint": "oxlint src/ packages/",
     "typecheck": "tsc --noEmit",
     "compile": "bun build --compile --outfile=dist/daemux ./src/cli/index.ts",

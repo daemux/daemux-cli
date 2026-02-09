@@ -1,11 +1,26 @@
 /**
  * Dialog Tools
  * Tools available to the lightweight dialog loop for task delegation.
- * The dialog loop uses these to spawn background tasks, list them, and cancel them.
+ * The dialog loop uses these to spawn background tasks, list them, cancel them,
+ * and create custom agents on-the-fly.
  */
 
-import type { ToolDefinition, ToolResult } from './types';
+import type { ToolDefinition, ToolResult, SubagentRecord } from './types';
 import type { BackgroundTaskRunner } from './background-task-runner';
+import type { AgentFactory } from './agent-factory';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface CreateAgentDeps {
+  agentFactory: AgentFactory;
+  spawnSubagent: (
+    agentName: string,
+    task: string,
+    options?: { timeout?: number; tools?: string[] },
+  ) => Promise<SubagentRecord>;
+}
 
 // ---------------------------------------------------------------------------
 // Tool Definitions
@@ -56,10 +71,38 @@ const cancelTaskTool: ToolDefinition = {
   },
 };
 
+const createAgentTool: ToolDefinition = {
+  name: 'create_agent',
+  description:
+    'Create and spawn a custom agent for a specific task. ' +
+    'Uses AI to generate an optimized agent configuration, then runs it. ' +
+    'Use this when no existing agent fits the task.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      task_description: {
+        type: 'string',
+        description: 'What the agent should do. Be specific about the goal and constraints.',
+      },
+      tools: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional list of tool names to restrict the agent to (e.g. ["Read", "Grep", "Bash"]).',
+      },
+      model: {
+        type: 'string',
+        description: 'Model to use: haiku (fast/cheap), sonnet (balanced), opus (powerful), inherit (same as parent).',
+      },
+    },
+    required: ['task_description'],
+  },
+};
+
 export const DIALOG_TOOLS: ToolDefinition[] = [
   delegateTaskTool,
   listTasksTool,
   cancelTaskTool,
+  createAgentTool,
 ];
 
 // ---------------------------------------------------------------------------
@@ -74,6 +117,7 @@ export type DialogToolExecutor = (
 export function createDialogToolExecutors(
   runner: BackgroundTaskRunner,
   chatKey: string,
+  createAgentDeps?: CreateAgentDeps,
 ): Map<string, DialogToolExecutor> {
   const executors = new Map<string, DialogToolExecutor>();
 
@@ -113,5 +157,76 @@ export function createDialogToolExecutors(
     return { toolUseId, content: msg, isError: !cancelled };
   });
 
+  executors.set('create_agent', async (toolUseId, input) => {
+    if (!createAgentDeps) {
+      return {
+        toolUseId,
+        content: 'Error: Agent creation is not available (factory not configured)',
+        isError: true,
+      };
+    }
+
+    const taskDescription = input.task_description as string;
+    if (!taskDescription?.trim()) {
+      return { toolUseId, content: 'Error: task_description is required', isError: true };
+    }
+
+    try {
+      const tools = Array.isArray(input.tools)
+        ? input.tools.filter((t): t is string => typeof t === 'string')
+        : undefined;
+      const model = typeof input.model === 'string' ? input.model : undefined;
+
+      const agent = await createAgentDeps.agentFactory.createAgent(
+        taskDescription.trim(),
+        { tools, model },
+      );
+
+      const record = await createAgentDeps.spawnSubagent(agent.name, taskDescription.trim(), {
+        tools: agent.tools,
+      });
+
+      return formatCreateAgentResult(toolUseId, agent.name, record);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { toolUseId, content: `Error creating agent: ${errorMsg}`, isError: true };
+    }
+  });
+
   return executors;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatCreateAgentResult(
+  toolUseId: string,
+  agentName: string,
+  record: SubagentRecord,
+): ToolResult {
+  switch (record.status) {
+    case 'completed':
+      return {
+        toolUseId,
+        content: `[${agentName}] ${record.result || 'Agent completed with no output.'}`,
+      };
+    case 'failed':
+      return {
+        toolUseId,
+        content: `Error: Agent '${agentName}' failed: ${record.result ?? 'Unknown error'}`,
+        isError: true,
+      };
+    case 'timeout':
+      return {
+        toolUseId,
+        content: `Error: Agent '${agentName}' timed out after ${record.timeoutMs}ms`,
+        isError: true,
+      };
+    default:
+      return {
+        toolUseId,
+        content: `Agent '${agentName}' spawned (id: ${record.id}, status: ${record.status})`,
+      };
+  }
 }

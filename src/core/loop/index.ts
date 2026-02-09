@@ -94,9 +94,8 @@ export class AgenticLoop {
 
   async run(message: string, loopConfig: LoopConfig = {}): Promise<LoopResult> {
     const state = await this.initializeRun(message, loopConfig);
-    const maxIter = loopConfig.maxIterations ?? 100;
 
-    while (state.iterations < maxIter && !this.interrupted) {
+    while (!this.interrupted) {
       state.iterations++;
       const shouldBreak = await this.executeIteration(state);
       if (shouldBreak) break;
@@ -120,6 +119,35 @@ export class AgenticLoop {
   interrupt(): void { this.interrupted = true; }
   isRunning(): boolean { return this.running; }
   getProvider(): LLMProvider { return this.provider; }
+
+  async getContextInfo(): Promise<{
+    sessionId: string | null;
+    effectiveContextWindow: number;
+    compactionThreshold: number;
+    systemPromptText: string;
+    agentContextText: string | null;
+    messageTokens: number;
+    messageCount: number;
+  }> {
+    const basePrompt = defaultSystemPrompt({});
+    const systemPromptText = await this.contextBuilder.buildSystemPrompt(basePrompt);
+    const agentContextText = await this.contextBuilder.loadAgentContext();
+    let messageTokens = 0;
+    let messageCount = 0;
+    if (this.currentSessionId) {
+      messageTokens = this.db.messages.getTokenCount(this.currentSessionId);
+      messageCount = this.db.messages.list(this.currentSessionId).length;
+    }
+    return {
+      sessionId: this.currentSessionId,
+      effectiveContextWindow: this.config.effectiveContextWindow,
+      compactionThreshold: this.config.compactionThreshold,
+      systemPromptText,
+      agentContextText,
+      messageTokens,
+      messageCount,
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // Private: Run Initialization

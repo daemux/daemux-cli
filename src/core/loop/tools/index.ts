@@ -19,6 +19,10 @@ export { result, resolvePath } from './helpers';
 export { spawnAgentTool, createSpawnAgentTool } from './spawn-agent';
 export type { SpawnAgentDeps, SpawnAgentInput } from './spawn-agent';
 
+// SendMessage is registered dynamically for swarm agents only.
+export { sendMessageTool, createSendMessageTool } from './send-message';
+export type { SendMessageDeps } from './send-message';
+
 export const BUILTIN_TOOLS = [readFileTool, writeFileTool, bashTool, editTool, globTool, grepTool];
 
 type ToolExecutor = (

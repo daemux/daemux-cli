@@ -1,14 +1,7 @@
-/**
- * Typed Event Bus with Pub/Sub Pattern
- * Provides strongly typed events for the agent platform
- */
+/** Typed Event Bus with Pub/Sub Pattern */
 
 import type { Message, Task, SubagentRecord } from './types';
 import type { HeartbeatContext } from './heartbeat-manager';
-
-// ---------------------------------------------------------------------------
-// Event Definitions
-// ---------------------------------------------------------------------------
 
 export interface EventMap {
   // Message events
@@ -85,15 +78,31 @@ export interface EventMap {
   'work:task-completed': { taskId: string; subject: string; success: boolean; durationMs: number };
   'work:budget-exhausted': { tasksThisHour: number; limit: number };
   'work:poll': { availableTasks: number; runningTasks: number };
+
+  // Swarm events
+  'swarm:message': { swarmMessageId: string; from: string; to: string; type: string };
+  'swarm:broadcast': { from: string; type: string; recipientCount: number };
+  'swarm:agent-complete': { swarmId: string; agentId: string; result: string };
+  'swarm:agent-fail': { swarmId: string; agentId: string; error: string };
+
+  // Metrics events
+  'metrics:agent': {
+    agentName: string; tokensUsed: number; toolUses: number;
+    duration: number; model: string; timestamp: number;
+  };
+  'metrics:swarm': {
+    swarmId: string; totalTokens: number; totalToolUses: number;
+    totalDuration: number; agentCount: number; timestamp: number;
+    agentMetrics: Array<{
+      agentName: string; tokensUsed: number; toolUses: number;
+      duration: number; model: string; timestamp: number;
+    }>;
+  };
 }
 
 export type EventName = keyof EventMap;
 export type EventPayload<E extends EventName> = EventMap[E];
 export type EventHandler<E extends EventName> = (payload: EventPayload<E>) => void | Promise<void>;
-
-// ---------------------------------------------------------------------------
-// EventBus Implementation
-// ---------------------------------------------------------------------------
 
 interface ListenerEntry<E extends EventName> {
   handler: EventHandler<E>;
@@ -108,32 +117,21 @@ export class EventBus {
     this.maxListeners = options?.maxListeners ?? 100;
   }
 
-  /**
-   * Subscribe to an event
-   * Returns an unsubscribe function
-   */
+  /** Subscribe to an event. Returns an unsubscribe function. */
   on<E extends EventName>(event: E, handler: EventHandler<E>): () => void {
     return this.addListener(event, handler, false);
   }
 
-  /**
-   * Subscribe to an event once
-   * Handler is automatically removed after first invocation
-   */
+  /** Subscribe once. Handler is removed after first invocation. */
   once<E extends EventName>(event: E, handler: EventHandler<E>): () => void {
     return this.addListener(event, handler, true);
   }
 
-  /**
-   * Emit an event to all subscribers
-   * Handlers are called in order of registration
-   * Errors in handlers do not stop other handlers from executing
-   */
+  /** Emit an event. Errors in handlers do not stop other handlers from executing. */
   async emit<E extends EventName>(event: E, payload: EventPayload<E>): Promise<void> {
     const entries = this.listeners.get(event);
     if (!entries || entries.length === 0) return;
 
-    // Copy to avoid mutation during iteration
     const snapshot = [...entries];
     let hasOnce = false;
 
@@ -146,8 +144,7 @@ export class EventBus {
       }
     }
 
-    // Remove only the once-handlers that were actually fired in this emit cycle.
-    // Handlers registered during the emit cycle are not in the snapshot and are preserved.
+    // Remove once-handlers fired in this cycle; preserve handlers registered during emit
     if (hasOnce) {
       const onceFired = new Set(snapshot.filter(e => e.once));
       const remaining = entries.filter(e => !onceFired.has(e));
@@ -159,38 +156,13 @@ export class EventBus {
     }
   }
 
-  /**
-   * Remove all listeners for a specific event
-   */
-  off(event: EventName): void {
-    this.listeners.delete(event);
-  }
-
-  /**
-   * Remove all listeners for all events
-   */
-  clear(): void {
-    this.listeners.clear();
-  }
-
-  /**
-   * Get the number of listeners for an event
-   */
-  listenerCount(event: EventName): number {
-    return this.listeners.get(event)?.length ?? 0;
-  }
-
-  /**
-   * Get all event names with listeners
-   */
-  eventNames(): EventName[] {
-    return Array.from(this.listeners.keys());
-  }
+  off(event: EventName): void { this.listeners.delete(event); }
+  clear(): void { this.listeners.clear(); }
+  listenerCount(event: EventName): number { return this.listeners.get(event)?.length ?? 0; }
+  eventNames(): EventName[] { return Array.from(this.listeners.keys()); }
 
   private addListener<E extends EventName>(
-    event: E,
-    handler: EventHandler<E>,
-    once: boolean
+    event: E, handler: EventHandler<E>, once: boolean,
   ): () => void {
     let entries = this.listeners.get(event);
     if (!entries) {
@@ -200,34 +172,24 @@ export class EventBus {
 
     if (entries.length >= this.maxListeners) {
       console.warn(
-        `EventBus: Possible memory leak detected. ` +
-        `Event '${event}' has ${entries.length} listeners. ` +
-        `Max is ${this.maxListeners}.`
+        `EventBus: Possible memory leak. Event '${event}' has ${entries.length} listeners (max ${this.maxListeners}).`
       );
     }
 
     const entry: ListenerEntry<E> = { handler, once };
     entries.push(entry as ListenerEntry<EventName>);
 
-    // Return unsubscribe function
     return () => {
       const currentEntries = this.listeners.get(event);
-      if (currentEntries) {
-        const index = currentEntries.indexOf(entry as ListenerEntry<EventName>);
-        if (index !== -1) {
-          currentEntries.splice(index, 1);
-          if (currentEntries.length === 0) {
-            this.listeners.delete(event);
-          }
-        }
+      if (!currentEntries) return;
+      const index = currentEntries.indexOf(entry as ListenerEntry<EventName>);
+      if (index !== -1) {
+        currentEntries.splice(index, 1);
+        if (currentEntries.length === 0) this.listeners.delete(event);
       }
     };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Global EventBus Instance
-// ---------------------------------------------------------------------------
 
 let globalEventBus: EventBus | null = null;
 
@@ -237,8 +199,6 @@ export function createEventBus(options?: { maxListeners?: number }): EventBus {
 }
 
 export function getEventBus(): EventBus {
-  if (!globalEventBus) {
-    globalEventBus = new EventBus();
-  }
+  if (!globalEventBus) globalEventBus = new EventBus();
   return globalEventBus;
 }

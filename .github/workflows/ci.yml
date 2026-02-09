@@ -36,3 +36,7 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Coverage (informational)
+        run: bun run test:coverage
+        continue-on-error: true

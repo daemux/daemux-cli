@@ -34,8 +34,8 @@ function createMockRunner(options?: {
 // ---------------------------------------------------------------------------
 
 describe('DIALOG_TOOLS', () => {
-  it('should export exactly 3 tools', () => {
-    expect(DIALOG_TOOLS).toHaveLength(3);
+  it('should export exactly 4 tools', () => {
+    expect(DIALOG_TOOLS).toHaveLength(4);
   });
 
   it('should include delegate_task tool', () => {
@@ -53,6 +53,12 @@ describe('DIALOG_TOOLS', () => {
     const tool = DIALOG_TOOLS.find(t => t.name === 'cancel_task');
     expect(tool).toBeDefined();
     expect(tool!.inputSchema.required).toEqual(['taskId']);
+  });
+
+  it('should include create_agent tool', () => {
+    const tool = DIALOG_TOOLS.find(t => t.name === 'create_agent');
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema.required).toEqual(['task_description']);
   });
 });
 
@@ -277,18 +283,181 @@ describe('createDialogToolExecutors', () => {
   });
 
   describe('Executor map', () => {
-    it('should contain exactly 3 executors', () => {
+    it('should contain exactly 4 executors', () => {
       const runner = createMockRunner();
       const executors = createDialogToolExecutors(runner, chatKey);
-      expect(executors.size).toBe(3);
+      expect(executors.size).toBe(4);
     });
 
-    it('should have entries for all three tool names', () => {
+    it('should have entries for all four tool names', () => {
       const runner = createMockRunner();
       const executors = createDialogToolExecutors(runner, chatKey);
       expect(executors.has('delegate_task')).toBe(true);
       expect(executors.has('list_tasks')).toBe(true);
       expect(executors.has('cancel_task')).toBe(true);
+      expect(executors.has('create_agent')).toBe(true);
+    });
+  });
+
+  describe('create_agent', () => {
+    it('should return error when factory is not configured', async () => {
+      const runner = createMockRunner();
+      const executors = createDialogToolExecutors(runner, chatKey);
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-1', { task_description: 'Build something' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('factory not configured');
+    });
+
+    it('should return error when task_description is empty', async () => {
+      const runner = createMockRunner();
+      const mockFactory = { createAgent: async () => ({} as never) };
+      const mockSpawn = async () => ({} as never);
+      const executors = createDialogToolExecutors(runner, chatKey, {
+        agentFactory: mockFactory as never,
+        spawnSubagent: mockSpawn,
+      });
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-2', { task_description: '' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('task_description is required');
+    });
+
+    it('should return error when task_description is missing', async () => {
+      const runner = createMockRunner();
+      const mockFactory = { createAgent: async () => ({} as never) };
+      const mockSpawn = async () => ({} as never);
+      const executors = createDialogToolExecutors(runner, chatKey, {
+        agentFactory: mockFactory as never,
+        spawnSubagent: mockSpawn,
+      });
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-3', {});
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('task_description is required');
+    });
+
+    it('should create and spawn agent on success', async () => {
+      const runner = createMockRunner();
+      const mockAgent = {
+        name: 'test-dynamic',
+        description: 'Dynamic agent',
+        model: 'haiku' as const,
+        tools: ['Read', 'Grep'],
+        color: 'blue' as const,
+        systemPrompt: 'You are helpful.',
+        pluginId: 'dynamic',
+      };
+      const mockRecord = {
+        id: 'rec-dyn-1',
+        agentName: 'test-dynamic',
+        parentId: null,
+        taskDescription: 'Do something',
+        status: 'completed' as const,
+        spawnedAt: Date.now(),
+        timeoutMs: 300000,
+        result: 'Agent completed the task.',
+        completedAt: Date.now(),
+      };
+
+      const mockFactory = { createAgent: async () => mockAgent };
+      const mockSpawn = async () => mockRecord;
+      const executors = createDialogToolExecutors(runner, chatKey, {
+        agentFactory: mockFactory as never,
+        spawnSubagent: mockSpawn,
+      });
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-4', { task_description: 'Do something dynamic' });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('[test-dynamic]');
+      expect(result.content).toContain('Agent completed the task.');
+    });
+
+    it('should handle factory error gracefully', async () => {
+      const runner = createMockRunner();
+      const mockFactory = {
+        createAgent: async () => { throw new Error('LLM unavailable'); },
+      };
+      const mockSpawn = async () => ({} as never);
+      const executors = createDialogToolExecutors(runner, chatKey, {
+        agentFactory: mockFactory as never,
+        spawnSubagent: mockSpawn,
+      });
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-5', { task_description: 'Create something' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('LLM unavailable');
+    });
+
+    it('should format failed agent result correctly', async () => {
+      const runner = createMockRunner();
+      const mockAgent = {
+        name: 'fail-agent',
+        tools: ['Read'],
+        pluginId: 'dynamic',
+      };
+      const mockRecord = {
+        id: 'rec-fail',
+        agentName: 'fail-agent',
+        parentId: null,
+        taskDescription: 'Do something',
+        status: 'failed' as const,
+        spawnedAt: Date.now(),
+        timeoutMs: 300000,
+        result: 'Out of memory',
+      };
+
+      const executors = createDialogToolExecutors(runner, chatKey, {
+        agentFactory: { createAgent: async () => mockAgent } as never,
+        spawnSubagent: async () => mockRecord,
+      });
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-6', { task_description: 'Fail task' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('fail-agent');
+      expect(result.content).toContain('Out of memory');
+    });
+
+    it('should format timed-out agent result correctly', async () => {
+      const runner = createMockRunner();
+      const mockAgent = {
+        name: 'timeout-agent',
+        tools: [],
+        pluginId: 'dynamic',
+      };
+      const mockRecord = {
+        id: 'rec-timeout',
+        agentName: 'timeout-agent',
+        parentId: null,
+        taskDescription: 'Slow task',
+        status: 'timeout' as const,
+        spawnedAt: Date.now(),
+        timeoutMs: 60000,
+      };
+
+      const executors = createDialogToolExecutors(runner, chatKey, {
+        agentFactory: { createAgent: async () => mockAgent } as never,
+        spawnSubagent: async () => mockRecord,
+      });
+      const createAgent = executors.get('create_agent')!;
+
+      const result = await createAgent('tool-ca-7', { task_description: 'Slow task' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('timed out');
+      expect(result.content).toContain('60000');
     });
   });
 });

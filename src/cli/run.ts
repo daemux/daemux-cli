@@ -29,6 +29,7 @@ import { createStreamHandler, printStats } from './run-output';
 import { initializeChannels } from './run-channels';
 import { loadAnthropicProvider } from './provider-loader';
 import { initMCP } from '../core/mcp/init';
+import { getServiceManager } from '../infra/service';
 
 // ---------------------------------------------------------------------------
 // Session Management
@@ -84,7 +85,7 @@ async function processInteractiveInput(
   }
 
   if (trimmed.startsWith('/')) {
-    await handleCommand(trimmed, loop);
+    await handleCommand(trimmed, loop, mcpConfig);
     rl.prompt();
     return;
   }
@@ -131,7 +132,7 @@ async function runInteractive(loop: AgenticLoop, sessionId?: string, mcpConfig: 
   rl.prompt();
 }
 
-async function handleCommand(cmd: string, loop: AgenticLoop): Promise<void> {
+async function handleCommand(cmd: string, loop: AgenticLoop, mcpConfig: LoopConfig = {}): Promise<void> {
   const [command] = cmd.slice(1).split(' ');
 
   switch (command) {
@@ -139,6 +140,7 @@ async function handleCommand(cmd: string, loop: AgenticLoop): Promise<void> {
       console.log(bold('\nAvailable Commands:'));
       console.log('  /help     - Show this help message');
       console.log('  /session  - Show current session ID');
+      console.log('  /context  - Show context window usage');
       console.log('  /clear    - Clear screen');
       console.log('  /exit     - Exit the session');
       console.log();
@@ -147,6 +149,12 @@ async function handleCommand(cmd: string, loop: AgenticLoop): Promise<void> {
     case 'session': {
       const session = loop.getSession();
       printInfo(session ? `Current session: ${session}` : 'No active session');
+      return;
+    }
+
+    case 'context': {
+      const { gatherAndDisplay } = await import('./context-display');
+      await gatherAndDisplay(loop, mcpConfig.tools ?? []);
       return;
     }
 
@@ -269,8 +277,25 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
     toolExecutors: mcpExecutors.size > 0 ? mcpExecutors : undefined,
   };
 
+  // Skip channels in interactive mode if daemux service is already running
+  let skipChannels = false;
+  if (process.stdin.isTTY) {
+    try {
+      const info = await getServiceManager().status('daemux');
+      if (info.status === 'running') {
+        skipChannels = true;
+        printWarning('Daemux service is running — channel connections (Telegram, etc.) skipped in interactive mode.');
+        printInfo('Channels are managed by the running service. This session is agent-only.');
+      }
+    } catch {
+      // Service check failed (not installed, unsupported platform) — proceed normally
+    }
+  }
+
   // Initialize channels (Telegram, etc.) with dialog mode dependencies
-  const { router, channelIds } = await initializeChannels(eventBus, loop, logger, { db, provider, config });
+  const { router, channelIds } = skipChannels
+    ? { router: null, channelIds: [] as string[] }
+    : await initializeChannels(eventBus, loop, logger, { db, provider, config });
 
   let cleanedUp = false;
   async function cleanup(): Promise<void> {

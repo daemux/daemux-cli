@@ -4,44 +4,60 @@
  * Called at startup before plugin activation so plugins can reference built-in agents.
  */
 
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import type { AgentDefinition } from './types';
+
+/** Parse a scalar YAML value: booleans, JSON arrays, quoted strings, or plain text. */
+function parseScalarValue(raw: string): unknown {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+
+  if (raw.startsWith('[')) {
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
+
+  if (raw.match(/^(["']).*\1$/)) return raw.slice(1, -1);
+
+  return raw;
+}
 
 /**
  * Parse YAML-like frontmatter between --- markers.
  * Handles scalar values, inline JSON arrays, and YAML list syntax (- item).
  */
 export function parseFrontmatter(content: string): { data: Record<string, unknown>; body: string } {
-  const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+  const fmMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n([\s\S]*)$/);
   if (!fmMatch || !fmMatch[1]) {
     return { data: {}, body: content };
   }
 
-  const fmContent = fmMatch[1];
-  const body = fmMatch[2] ?? '';
   const data: Record<string, unknown> = {};
-  const lines = fmContent.split('\n');
+  const lines = fmMatch[1].split(/\r?\n/);
 
   let currentKey: string | null = null;
   let listItems: string[] | null = null;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    // Check for YAML list item (  - value)
-    if (trimmed.startsWith('- ') && currentKey && listItems !== null) {
-      listItems.push(trimmed.slice(2).trim());
-      continue;
-    }
-
-    // Flush any pending list
+  /** Flush a pending YAML list into data and reset state. */
+  function flushList(): void {
     if (currentKey && listItems !== null) {
       data[currentKey] = listItems;
       currentKey = null;
       listItems = null;
     }
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // YAML list item (  - value)
+    if (trimmed.startsWith('- ') && currentKey && listItems !== null) {
+      listItems.push(trimmed.slice(2).trim());
+      continue;
+    }
+
+    flushList();
 
     const colonIndex = trimmed.indexOf(':');
     if (colonIndex === -1) continue;
@@ -56,35 +72,12 @@ export function parseFrontmatter(content: string): { data: Record<string, unknow
       continue;
     }
 
-    // Inline JSON array
-    if (rawValue.startsWith('[')) {
-      try {
-        data[key] = JSON.parse(rawValue);
-      } catch {
-        data[key] = rawValue;
-      }
-      continue;
-    }
-
-    // Booleans
-    if (rawValue === 'true') { data[key] = true; continue; }
-    if (rawValue === 'false') { data[key] = false; continue; }
-
-    // Strip quotes
-    if (rawValue.match(/^["'].*["']$/)) {
-      data[key] = rawValue.slice(1, -1);
-      continue;
-    }
-
-    data[key] = rawValue;
+    data[key] = parseScalarValue(rawValue);
   }
 
-  // Flush final pending list
-  if (currentKey && listItems !== null) {
-    data[currentKey] = listItems;
-  }
+  flushList();
 
-  return { data, body };
+  return { data, body: fmMatch[2] ?? '' };
 }
 
 /**
@@ -104,7 +97,11 @@ export function loadBuiltinAgents(agentsDir?: string): AgentDefinition[] {
   const agents: AgentDefinition[] = [];
 
   for (const file of files) {
-    const content = readFileSync(join(dir, file), 'utf-8');
+    const filePath = join(dir, file);
+    const stat = statSync(filePath);
+    if (stat.size > 65536) continue; // skip files > 64KB
+
+    const content = readFileSync(filePath, 'utf-8');
     const { data, body } = parseFrontmatter(content);
 
     if (!data.name || !data.description) continue;
