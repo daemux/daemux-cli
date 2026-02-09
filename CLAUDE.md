@@ -70,7 +70,7 @@ Plugins install to `~/.daemux/plugins/<flat-name>/` (scoped prefix stripped: `@d
 
 ### Plugin Loading
 
-All plugin loading uses `~/.daemux/plugins/` exclusively. No hardcoded sibling-repo paths — plugins must be installed via `daemux plugins install` or the setup script.
+Plugin loading searches `~/.daemux/plugins/` (user scope) and `./.daemux/plugins/` (project scope). No hardcoded sibling-repo paths — plugins must be installed via `daemux plugins install` or the setup script.
 
 ### Cross-Repo Plugin Development
 
@@ -79,13 +79,13 @@ All plugin loading uses `~/.daemux/plugins/` exclusively. No hardcoded sibling-r
 
 ### Available Plugins (from daemux-plugins repo)
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `@daemux/plugin-sdk` | 0.5.0 | Shared types and helpers for plugin authors |
-| `@daemux/anthropic-provider` | 1.1.0 | Anthropic Claude LLM provider |
-| `@daemux/telegram-adapter` | 1.0.0 | Telegram Bot API channel adapter |
-| `@daemux/human-behavior` | 0.4.0 | Human-like response behavior simulation |
-| `@daemux/transcription` | 0.4.0 | OpenAI audio transcription for voice messages |
+| Package | Purpose |
+|---------|---------|
+| `@daemux/plugin-sdk` | Shared types and helpers for plugin authors |
+| `@daemux/anthropic-provider` | Anthropic Claude LLM provider |
+| `@daemux/telegram-adapter` | Telegram Bot API channel adapter |
+| `@daemux/human-behavior` | Human-like response behavior simulation |
+| `@daemux/transcription` | OpenAI audio transcription for voice messages |
 
 ### Important
 
