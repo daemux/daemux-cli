@@ -90,3 +90,9 @@ Plugin loading searches `~/.daemux/plugins/` (user scope) and `./.daemux/plugins
 ### Important
 
 New plugins and MCP servers belong in the `daemux-plugins` repo, not here. This repo only consumes them via `daemux plugins install`.
+
+## Runtime Behavior
+
+### Channel Conflict Prevention
+
+When running `daemux` interactively while the daemux service is already running (`daemux service start`), channel connections (Telegram, etc.) are automatically skipped to prevent conflicts (e.g., Telegram 409 errors from duplicate polling). The interactive session runs in agent-only mode. Channels remain managed by the running service.

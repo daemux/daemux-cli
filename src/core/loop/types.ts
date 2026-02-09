@@ -15,7 +15,6 @@ export interface LoopConfig {
   tools?: ToolDefinition[];
   /** Custom tool executors to register on the ToolExecutor instance */
   toolExecutors?: Map<string, (id: string, input: Record<string, unknown>) => Promise<ToolResult>>;
-  maxIterations?: number;
   timeoutMs?: number;
   compactionThreshold?: number;
   onStream?: (chunk: StreamChunk) => void;

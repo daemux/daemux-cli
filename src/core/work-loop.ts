@@ -253,7 +253,6 @@ export class WorkLoop {
 
     loop.run(prompt, {
       timeoutMs: task.timeBudgetMs,
-      maxIterations: this.config.workMaxIterationsPerTask,
     })
       .then(async result => {
         if (!this.isRunning) return;

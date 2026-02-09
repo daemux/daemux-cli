@@ -135,7 +135,6 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'You are a helpful assistant. Answer questions concisely.',
         tools: [], // No tools needed for simple math
-        maxIterations: 1,
       });
 
       expect(result).toBeDefined();
@@ -164,7 +163,6 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'You are a friendly assistant.',
         tools: [],
-        maxIterations: 1,
       });
 
       // Check that messages were stored
@@ -191,7 +189,6 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'Say hi back.',
         tools: [],
-        maxIterations: 1,
       });
 
       // At minimum, we should see the loop complete without errors
@@ -210,7 +207,6 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'Count to the specified number, one number per line.',
         tools: [],
-        maxIterations: 1,
         onStream: (chunk) => {
           chunks.push(chunk);
         },
@@ -245,7 +241,6 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'Answer briefly.',
         tools: [],
-        maxIterations: 1,
       });
 
       // The loop should complete
@@ -268,7 +263,6 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'If the user sends an empty message, respond with "No message received."',
         tools: [],
-        maxIterations: 1,
       });
 
       expect(result).toBeDefined();
@@ -289,14 +283,12 @@ describe('E2E: Complete Agent Flow', () => {
         sessionId,
         systemPrompt: 'You are a helpful assistant that remembers information.',
         tools: [],
-        maxIterations: 1,
       });
 
       // Resume session with follow-up using the SAME sessionId
       const result2 = await loop.resume(sessionId, 'What is my favorite color?', {
         systemPrompt: 'You are a helpful assistant that remembers information.',
         tools: [],
-        maxIterations: 1,
       });
 
       // The assistant should remember from context
@@ -414,7 +406,6 @@ describe('E2E: Full Installation Simulation', () => {
       sessionId: session.id,
       systemPrompt: 'You are testing an installation. Respond with exactly what the user asks.',
       tools: [],
-      maxIterations: 1,
     });
 
     // Verify the full flow worked

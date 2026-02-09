@@ -36,7 +36,6 @@ const testConfig: Config = {
   heartbeatEnabled: false,
   maxConcurrentTasks: 3,
   workPollingIntervalMs: 5000,
-  workMaxIterationsPerTask: 100,
   workBudgetMaxTasksPerHour: 50,
 };
 

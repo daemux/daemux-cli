@@ -23,8 +23,6 @@ const DIALOG_SYSTEM_PROMPT =
   'You can check on running tasks with list_tasks and cancel them with cancel_task. ' +
   'When a background task completes, the user will be notified automatically.';
 
-const DIALOG_MAX_ITERATIONS = 2;
-
 interface QueueItem {
   text: string;
   message: RichChannelMessage;
@@ -162,7 +160,6 @@ export class ChatSession {
       systemPrompt: DIALOG_SYSTEM_PROMPT,
       tools: DIALOG_TOOLS,
       toolExecutors: this.toolExecutors,
-      maxIterations: DIALOG_MAX_ITERATIONS,
     });
 
     this.sessionId = result.sessionId;

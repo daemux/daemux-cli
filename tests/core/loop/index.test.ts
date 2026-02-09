@@ -31,7 +31,7 @@ describe('AgenticLoop', () => {
     agentId: 'test-agent',
     dataDir: '/tmp/test',
     model: 'mock-model',
-      compactionThreshold: 0.8,
+    compactionThreshold: 0.8,
     effectiveContextWindow: 180000,
     queueMode: 'steer',
     collectWindowMs: 5000,
@@ -43,7 +43,6 @@ describe('AgenticLoop', () => {
     heartbeatEnabled: false,
     maxConcurrentTasks: 3,
     workPollingIntervalMs: 5000,
-    workMaxIterationsPerTask: 100,
     workBudgetMaxTasksPerHour: 50,
   };
 

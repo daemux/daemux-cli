@@ -28,7 +28,6 @@ const SettingsFileSchema = z.object({
   heartbeatEnabled: z.boolean().optional(),
   maxConcurrentTasks: z.number().min(1).max(20).optional(),
   workPollingIntervalMs: z.number().positive().optional(),
-  workMaxIterationsPerTask: z.number().positive().optional(),
   workBudgetMaxTasksPerHour: z.number().positive().optional(),
 }).passthrough();
 
@@ -64,7 +63,6 @@ const DEFAULT_CONFIG: Omit<Config, 'agentId' | 'dataDir'> = {
   heartbeatEnabled: false,
   maxConcurrentTasks: 3,
   workPollingIntervalMs: 5000,
-  workMaxIterationsPerTask: 100,
   workBudgetMaxTasksPerHour: 50,
 };
 
@@ -80,6 +78,7 @@ function loadJsonFile<T>(path: string, schema: z.ZodSchema<T>): T | null {
     const data = JSON.parse(content);
     // Clean up deprecated fields from old settings files
     delete data.maxTokens;
+    delete data.workMaxIterationsPerTask;
     const result = schema.safeParse(data);
     if (result.success) {
       return result.data;
@@ -123,7 +122,6 @@ const ENV_MAPPINGS: EnvMapping[] = [
   { envKey: 'AGENT_DATA_DIR', configKey: 'dataDir', transform: (v) => v },
   { envKey: 'AGENT_MAX_CONCURRENT_TASKS', configKey: 'maxConcurrentTasks', transform: (v: string) => parseInt(v, 10) },
   { envKey: 'AGENT_WORK_POLLING_INTERVAL_MS', configKey: 'workPollingIntervalMs', transform: (v: string) => parseInt(v, 10) },
-  { envKey: 'AGENT_WORK_MAX_ITERATIONS', configKey: 'workMaxIterationsPerTask', transform: (v: string) => parseInt(v, 10) },
   { envKey: 'AGENT_WORK_BUDGET_MAX_TASKS_PER_HOUR', configKey: 'workBudgetMaxTasksPerHour', transform: (v: string) => parseInt(v, 10) },
   { envKey: 'ANTHROPIC_LOG', configKey: 'debug', transform: (v: string) => v.toLowerCase() === 'debug' },
 ];
@@ -261,7 +259,7 @@ export class ConfigLoader {
       'model', 'compactionThreshold', 'effectiveContextWindow',
       'queueMode', 'collectWindowMs', 'hookTimeoutMs', 'turnTimeoutMs',
       'debug', 'mcpDebug', 'heartbeatIntervalMs', 'heartbeatEnabled',
-      'maxConcurrentTasks', 'workPollingIntervalMs', 'workMaxIterationsPerTask',
+      'maxConcurrentTasks', 'workPollingIntervalMs',
       'workBudgetMaxTasksPerHour',
     ];
 

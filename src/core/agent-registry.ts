@@ -38,7 +38,6 @@ export interface LoopRunConfig {
   tools?: ToolDefinition[];
   toolExecutors?: Map<string, (id: string, input: Record<string, unknown>) => Promise<{ toolUseId: string; content: string; isError?: boolean }>>;
   timeoutMs?: number;
-  maxIterations?: number;
   onStream?: (chunk: { type: string; [key: string]: unknown }) => void;
 }
 
@@ -226,7 +225,6 @@ export class AgentRegistry {
       systemPrompt: agent.systemPrompt,
       tools: filteredTools,
       timeoutMs,
-      maxIterations: 50,
       onStream,
     };
   }

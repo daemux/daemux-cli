@@ -38,7 +38,6 @@ function createTestConfig(overrides?: Partial<Config>): Config {
     heartbeatEnabled: false,
     maxConcurrentTasks: 3,
     workPollingIntervalMs: 50,
-    workMaxIterationsPerTask: 10,
     workBudgetMaxTasksPerHour: 50,
     ...overrides,
   };

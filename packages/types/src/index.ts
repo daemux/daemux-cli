@@ -34,7 +34,6 @@ export const ConfigSchema = z.object({
   heartbeatEnabled: z.boolean().default(false),
   maxConcurrentTasks: z.number().min(1).max(20).default(3),
   workPollingIntervalMs: z.number().positive().default(5000),
-  workMaxIterationsPerTask: z.number().positive().default(100),
   workBudgetMaxTasksPerHour: z.number().positive().default(50),
 });
 
