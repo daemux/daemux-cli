@@ -106,6 +106,7 @@ export class HttpMCPClient implements MCPServer {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      ...this.config.headers,
     };
     if (this.sessionId) {
       headers['Mcp-Session-Id'] = this.sessionId;

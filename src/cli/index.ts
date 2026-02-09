@@ -16,6 +16,7 @@ import { registerUninstallCommand } from './uninstall';
 import { registerApprovalCommands } from './approvals';
 import { registerChannelCommands } from './channels';
 import { registerWorkCommands } from './work';
+import { registerMCPCommands } from './mcp';
 import { setConfig, getConfig } from '../core/config';
 import { initLogger } from '../infra/logger';
 import { version as packageVersion } from '../../package.json';
@@ -83,6 +84,7 @@ function createProgram(): Command {
   registerApprovalCommands(program);
   registerChannelCommands(program);
   registerWorkCommands(program);
+  registerMCPCommands(program);
 
   return program;
 }

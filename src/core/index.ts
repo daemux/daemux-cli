@@ -257,3 +257,17 @@ export {
 export {
   classifyError,
 } from './error-classify';
+
+// MCP Environment Expansion
+export {
+  expandEnvValue,
+  expandEnvInRecord,
+  expandMCPConfig,
+} from './mcp/env-expand';
+
+// MCP Config Loading
+export {
+  loadMCPConfigs,
+  loadFromSettings,
+  loadFromProjectMcpJson,
+} from './mcp/config-loader';

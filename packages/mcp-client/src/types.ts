@@ -50,4 +50,6 @@ export interface MCPConfig {
   args?: string[];
   url?: string;
   env?: Record<string, string>;
+  type?: MCPTransport;
+  headers?: Record<string, string>;
 }

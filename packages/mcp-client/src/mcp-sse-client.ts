@@ -39,6 +39,7 @@ export class SseMCPClient implements MCPServer {
   private pending = new Map<number, PendingRequest>();
   private postEndpoint: string | null = null;
   private abortController: AbortController | null = null;
+  private streamActive = false;
 
   constructor(id: string, config: MCPConfig, logger?: Logger) {
     this.id = id;
@@ -59,8 +60,16 @@ export class SseMCPClient implements MCPServer {
     this.abortController = new AbortController();
     const sseUrl = baseUrl.endsWith('/sse') ? baseUrl : `${baseUrl}/sse`;
 
-    await this.startEventStream(sseUrl);
-    await this.sendRequest('initialize', buildInitializeParams());
+    this.streamActive = true;
+    try {
+      await this.startEventStream(sseUrl);
+      await this.sendRequest('initialize', buildInitializeParams());
+    } catch (err) {
+      this.streamActive = false;
+      this.abortController?.abort();
+      this.abortController = null;
+      throw err;
+    }
     this.connected = true;
 
     this.log?.info(`MCP server '${this.id}' connected via SSE`);
@@ -70,6 +79,7 @@ export class SseMCPClient implements MCPServer {
     if (!this.connected) return;
 
     this.connected = false;
+    this.streamActive = false;
     this.abortController?.abort();
     this.abortController = null;
     clearPendingRequests(this.pending, 'SSE client disconnected');
@@ -109,7 +119,7 @@ export class SseMCPClient implements MCPServer {
 
   private async startEventStream(sseUrl: string): Promise<void> {
     const response = await fetch(sseUrl, {
-      headers: { Accept: 'text/event-stream' },
+      headers: { Accept: 'text/event-stream', ...this.config.headers },
       signal: this.abortController?.signal,
     });
 
@@ -143,36 +153,48 @@ export class SseMCPClient implements MCPServer {
       }
     }
 
-    // Continue reading SSE events in the background for responses
-    void this.readSseLoop(reader, decoder, buffer);
+    // Start read loop and wait until it has issued its first read() call
+    // before returning, so responses to subsequent requests are not lost.
+    await this.readSseLoop(reader, decoder, buffer);
   }
 
-  private async readSseLoop(
+  private readSseLoop(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     decoder: TextDecoder,
     initialBuffer: string
   ): Promise<void> {
     let buffer = initialBuffer;
-    try {
-      while (this.connected) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            this.handleJsonLine(line.slice(6).trim());
+    return new Promise<void>((readyResolve) => {
+      const loop = async (): Promise<void> => {
+        let firstRead = true;
+        try {
+          while (this.streamActive) {
+            const readPromise = reader.read();
+            if (firstRead) {
+              firstRead = false;
+              readyResolve();
+            }
+            const { done, value } = await readPromise;
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                this.handleJsonLine(line.slice(6).trim());
+              }
+            }
           }
+        } catch {
+          if (this.streamActive) {
+            this.log?.warn(`MCP SSE '${this.id}' stream read error`);
+          }
+        } finally {
+          reader.releaseLock();
         }
-      }
-    } catch {
-      if (this.connected) {
-        this.log?.warn(`MCP SSE '${this.id}' stream read error`);
-      }
-    } finally {
-      reader.releaseLock();
-    }
+      };
+      void loop();
+    });
   }
 
   private handleJsonLine(data: string): void {
@@ -203,7 +225,7 @@ export class SseMCPClient implements MCPServer {
 
       fetch(this.postEndpoint!, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...this.config.headers },
         body,
       }).catch(err => {
         this.pending.delete(id);

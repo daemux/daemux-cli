@@ -20,11 +20,13 @@ import {
 import { loadConfig } from '../core/config';
 import { Database } from '../infra/database';
 import { createEventBus } from '../core/event-bus';
-import { AgenticLoop, createAgenticLoop } from '../core/loop';
+import { AgenticLoop, createAgenticLoop, BUILTIN_TOOLS } from '../core/loop';
+import type { LoopConfig } from '../core/loop';
 import { initLogger } from '../infra/logger';
 import { createStreamHandler, printStats } from './run-output';
 import { initializeChannels } from './run-channels';
 import { loadAnthropicProvider } from './provider-loader';
+import { initMCP } from '../core/mcp/init';
 
 // ---------------------------------------------------------------------------
 // Session Management
@@ -64,6 +66,7 @@ async function processInteractiveInput(
   loop: AgenticLoop,
   ctx: { sessionId?: string; running: boolean; streamHandler: ReturnType<typeof createStreamHandler> },
   rl: ReturnType<typeof createInterface>,
+  mcpConfig: LoopConfig,
 ): Promise<void> {
   const trimmed = input.trim();
 
@@ -88,7 +91,11 @@ async function processInteractiveInput(
   console.log();
 
   try {
-    const result = await loop.run(trimmed, { sessionId: ctx.sessionId, onStream: ctx.streamHandler });
+    const result = await loop.run(trimmed, {
+      sessionId: ctx.sessionId,
+      onStream: ctx.streamHandler,
+      ...mcpConfig,
+    });
     ctx.sessionId = result.sessionId;
     printStats(result.tokensUsed.input, result.tokensUsed.output, result.toolCalls.length, result.durationMs);
   } catch (err) {
@@ -100,7 +107,7 @@ async function processInteractiveInput(
   rl.prompt();
 }
 
-async function runInteractive(loop: AgenticLoop, sessionId?: string): Promise<void> {
+async function runInteractive(loop: AgenticLoop, sessionId?: string, mcpConfig: LoopConfig = {}): Promise<void> {
   console.log(bold('\nAgent Interactive Session'));
   console.log(dim('Type your message and press Enter. Type "exit" or press Ctrl+C to quit.\n'));
 
@@ -118,7 +125,7 @@ async function runInteractive(loop: AgenticLoop, sessionId?: string): Promise<vo
     }
   });
 
-  rl.on('line', (input: string) => processInteractiveInput(input, loop, ctx, rl));
+  rl.on('line', (input: string) => processInteractiveInput(input, loop, ctx, rl, mcpConfig));
   rl.prompt();
 }
 
@@ -163,7 +170,8 @@ async function runSingleMessage(
   loop: AgenticLoop,
   message: string,
   sessionId?: string,
-  showStream = true
+  showStream = true,
+  mcpConfig: LoopConfig = {},
 ): Promise<void> {
   const streamHandler = showStream ? createStreamHandler() : undefined;
 
@@ -171,6 +179,7 @@ async function runSingleMessage(
     const result = await loop.run(message, {
       sessionId,
       onStream: streamHandler,
+      ...mcpConfig,
     });
 
     if (!showStream) {
@@ -245,6 +254,13 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
   const eventBus = createEventBus();
   const loop = createAgenticLoop({ db, eventBus, config, provider });
 
+  // Initialize MCP servers and bridge their tools into the agentic loop
+  const { tools: mcpTools, executors: mcpExecutors, cleanup: mcpCleanup } = await initMCP(logger);
+  const mcpConfig: LoopConfig = {
+    tools: [...BUILTIN_TOOLS, ...mcpTools],
+    toolExecutors: mcpExecutors.size > 0 ? mcpExecutors : undefined,
+  };
+
   // Initialize channels (Telegram, etc.) with dialog mode dependencies
   const { router, channelIds } = await initializeChannels(eventBus, loop, logger, { db, provider, config });
 
@@ -252,6 +268,7 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
   async function cleanup(): Promise<void> {
     if (cleanedUp) return;
     cleanedUp = true;
+    await mcpCleanup();
     if (router) await router.stop();
     db.close();
   }
@@ -268,11 +285,11 @@ export async function runCommand(options: RunOptions = {}): Promise<void> {
 
   if (options.message) {
     // Single message mode
-    await runSingleMessage(loop, options.message, options.session, !options.quiet);
+    await runSingleMessage(loop, options.message, options.session, !options.quiet, mcpConfig);
     await cleanup();
   } else if (process.stdin.isTTY) {
     // Interactive terminal mode (channels also active in background)
-    await runInteractive(loop, options.session);
+    await runInteractive(loop, options.session, mcpConfig);
   } else if (router && channelIds.length > 0) {
     // Service mode: no terminal, channels are the only input
     logger.info('Running in service mode with channels', { channels: channelIds.join(', ') });
